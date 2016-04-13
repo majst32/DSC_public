@@ -1,39 +1,32 @@
-﻿Configuration DisableSSLConfig {
+﻿Configuration SSLWMF5Config {
     
     param (
         [parameter(Mandatory=$True)]
-        [string] $Guid
+        [string] $Guid,
+
+        [parameter(Mandatory=$True)]
+        [string[]] $SchannelSubkey
     )
+
+    Import-DscResource -Name xHotfix -ModuleName xWindowsUpdate
 
     Node $guid {
     
-        Registry Disable_SSL_2 {
-            Ensure = 'Present'
-            Key = "HKEY_Local_Machine\System\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 2.0\Server"
-            ValueName = "Enabled"
-            ValueType = 'Dword'
-            ValueData = "0"
-        }
-
-        Registry Disable_SSL_3_Server {
-            Ensure = 'Present'
-            Key = "HKEY_Local_Machine\System\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0\Server"
-            ValueName = "Enabled"
-            ValueType = 'Dword'
-            ValueData = "0"
-        }
-
-        Registry Disable_SSL_3_Client {
-            Ensure = 'Present'
-            Key = "HKEY_Local_Machine\System\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\SSL 3.0\Client"
-            ValueName = "Enabled"
-            ValueType = 'Dword'
-            ValueData = "0"
+        foreach ($s in $SchannelSubkey) {
+            
+            Registry $s {
+                Ensure = 'Present'
+                Key = "HKEY_Local_Machine\System\CurrentControlSet\Control\SecurityProviders\SCHANNEL\Protocols\$s"
+                ValueName = "Enabled"
+                ValueType = 'Dword'
+                ValueData = "0"
+            }
         }
     }
 }
 
+
 $Guid=Get-DscLocalConfigurationManager -CimSession s1| Select-Object -ExpandProperty ConfigurationID
-DisableSSLConfig -guid  $Guid -OutputPath "C:\DSC\Config"
+SSLWMF5Config -guid  $Guid -SchannelSubkey 'SSL 2.0\Server','SSL 3.0\Client','SSL 3.0\Server' -OutputPath "C:\DSC\Config"
 
      
