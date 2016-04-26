@@ -2,21 +2,31 @@
     AllNodes = @(
         @{
             NodeName  = "*"
-            WSUSUrl = 'http://W1:8530'
+            WSUSUrl = "http://W1:8530"
 
         },
         @{
-            NodeName = "S1";
+            NodeName = 'S1'
             GUID = Get-DscLocalConfigurationManager -CimSession S1 | Select-Object -ExpandProperty ConfigurationID
+        },
+        @{
+            NodeName = 'S2'
+            Role     = 'DHCPServer'
+            GUID = Get-DscLocalConfigurationManager -CimSession S2 | Select-Object -ExpandProperty ConfigurationID
+        }, 
+        @{
+            NodeName = 'S3'
+            Role     = 'DHCPServer'
+            GUID = Get-DscLocalConfigurationManager -CimSession S3 | Select-Object -ExpandProperty ConfigurationID
         } 
-    )
+
+    );
 }
   
-configuration BuildOut
-{
+configuration BuildOut {
     Import-DscResource -ModuleName PSDesiredStateConfiguration 
-    node $AllNodes.GUID
-    {
+    
+    node $AllNodes.GUID {
         
    ###########################################START WSUS####################################
         
@@ -44,7 +54,7 @@ configuration BuildOut
             Key = 'HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\WindowsUpdate'
             ValueName = 'WUServer'
             Ensure = 'Present'
-            ValueData = $AllNodes.WSUSUrl
+            ValueData = $Node.WSUSUrl
             ValueType = 'String'
             DependsOn = '[Registry]HKCU_WSUS_del_3'
         }
@@ -53,7 +63,7 @@ configuration BuildOut
             Key = 'HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\WindowsUpdate'
             ValueName = 'WUStatusServer'
             Ensure = 'Present'
-            ValueData = $AllNodes.WSUSUrl
+            ValueData = $Node.WSUSUrl
             ValueType = 'String'
             DependsOn = '[Registry]HKLM_WSUS_add_1'
         }
@@ -103,17 +113,44 @@ configuration BuildOut
             DependsOn = '[Registry]HKLM_WSUS_add_6'
         }
 
-        Service WSUS
-{
-    Name = 'wuauserv'
-    DependsOn = '[Registry]HKLM_WSUS_add_7'
-    Ensure = 'Present'
-    StartupType = 'Automatic'
-    State = 'Running'
-}
+        Service WSUS {
+            Name = 'wuauserv'
+            DependsOn = '[Registry]HKLM_WSUS_add_7'
+            Ensure = 'Present'
+            StartupType = 'Automatic'
+            State = 'Running'
+        }
+
+
+#####After setting all the registry settings, need to recycle wuauserv, how do you do this?
+#####Can't set it to stopped and then started with a DSC resource :(
+#####Then need it to install patches########################################################
 
 #########################################END WSUS###########################################
+    
+#End Node     
     }
+
+    node $AllNodes.Where{$_.Role -eq 'DHCPServer'}.GUID {
+
+###########################################START DHCP####################################
+#Should statically assign IP address first
+#Should set WSUS and update after
+#########################################################################################
+
+    WindowsFeature DHCP {
+        Name = 'DHCP'
+        Ensure = 'Present'
+    }
+
+    WindowsFeature DHCPMgmt {
+        Name = 'RSAT-DHCP'
+        Ensure =  'Present'
+    }
+
+###########################################END DHCP####################################
+
+ }
 }
 
 BuildOut -ConfigurationData $ConfigData -OutputPath "C:\DSC\Config"
