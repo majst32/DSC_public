@@ -2,7 +2,7 @@
     AllNodes = @(
         @{
             NodeName  = "*"
-            WSUSUrl = "http://W1:8530"
+            WSUSUrl = "http://w1:8530"
 
         },
         @{
@@ -11,7 +11,7 @@
         },
         @{
             NodeName = 'S2'
-            Role     = 'DHCPServer'
+            Role     = @('DHCPServer','DHCPServer1')
             GUID = Get-DscLocalConfigurationManager -CimSession S2 | Select-Object -ExpandProperty ConfigurationID
         }, 
         @{
@@ -24,7 +24,7 @@
 }
   
 configuration BuildOut {
-    Import-DscResource -ModuleName PSDesiredStateConfiguration 
+    Import-DscResource -ModuleName PSDesiredStateConfiguration,xDHCPServer
     
     node $AllNodes.GUID {
         
@@ -148,9 +148,28 @@ configuration BuildOut {
         Ensure =  'Present'
     }
 
+   }
+
+node $AllNodes.Where{$_.Role -eq 'DHCPServer1'}.GUID {
+
+    xDHCPServerScope TestScope {
+        IPEndRange = '192.168.2.254'
+        IPStartRange = '192.168.2.1'
+        Name = 'TestScope'
+        SubnetMask = '255.255.255.0'
+        AddressFamily = 'IPv4'
+        DependsOn = '[WindowsFeature]DHCP'
+        Ensure = 'Present'
+        LeaseDuration = '10'
+        State = 'Inactive'
+    }
+}
+
+################Need cross-machine dependency for DHCP to be installed on both servers####
+
 ###########################################END DHCP####################################
 
- }
+ 
 }
 
 BuildOut -ConfigurationData $ConfigData -OutputPath "C:\DSC\Config"
