@@ -2,7 +2,7 @@
     AllNodes = @(
         @{
             NodeName  = "*"
-            WSUSUrl = "http://w1:8530"
+            WSUSUrl = "http://W1:8530"
 
         },
         @{
@@ -13,6 +13,7 @@
             NodeName = 'S2'
             Role     = @('DHCPServer','DHCPServer1')
             GUID = Get-DscLocalConfigurationManager -CimSession S2 | Select-Object -ExpandProperty ConfigurationID
+            Partner = "S3"
         }, 
         @{
             NodeName = 'S3'
@@ -24,7 +25,7 @@
 }
   
 configuration BuildOut {
-    Import-DscResource -ModuleName PSDesiredStateConfiguration,xDHCPServer
+    Import-DscResource -ModuleName PSDesiredStateConfiguration,xDHCPServer,@{moduleName="mDHCPFailover";moduleVersion="1.1"}
     
     node $AllNodes.GUID {
         
@@ -148,6 +149,8 @@ configuration BuildOut {
         Ensure =  'Present'
     }
 
+    #Add DHCP service Present/Running here
+
    }
 
 node $AllNodes.Where{$_.Role -eq 'DHCPServer1'}.GUID {
@@ -163,6 +166,20 @@ node $AllNodes.Where{$_.Role -eq 'DHCPServer1'}.GUID {
         LeaseDuration = '10'
         State = 'Inactive'
     }
+
+
+    mDHCPFailoverRelationship fakeVLANScopeFailover {
+
+    Ensure = 'Present'
+    PartnerServer = 'S3'
+    RelationshipName = 'LBFailover'
+    ScopeName = '192.168.2.0'
+    DependsOn = '[xDhcpServerScope]TestScope'
+    LBPercentage = 50
+    SharedSecret = 'blahblahblah'
+    
+    }
+
 }
 
 ################Need cross-machine dependency for DHCP to be installed on both servers####
