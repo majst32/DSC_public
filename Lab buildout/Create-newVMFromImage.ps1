@@ -34,7 +34,7 @@ param (
 import-module VMManagement
 
 $SwitchName = Get-VMSwitchName -SwitchType $SwitchType
-$Status = get-VM -name $VMName -ErrorAction Stop
+$Status = get-VM -name $VMName -erroraction SilentlyContinue
 
 #If server is currently running, do nothing and exit.
 if (($Status -ne $Null) -and ($Status.State -eq "Running")) {
