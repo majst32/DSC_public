@@ -11,6 +11,7 @@
                     NodeName = "DC1"
                     Role = "AD_ADCS"
                     PSDSCAllowPlainTextPassword = $True
+                    PSDCSAllowDomainUser = $True
                 },
                 @{
                     NodeName = "Pull"
@@ -23,13 +24,13 @@ Configuration LabInfraBuild {
 
 param (
     [parameter(Mandatory=$True)]
-    [pscredential]$DACredential,
+    [pscredential]$EACredential,
 
     [parameter(Mandatory=$True)]
     [pscredential]$SafeModeAdminPW
     )
 
-    import-DSCresource -ModuleName PSDesiredStateConfiguration,@{ModuleName="xActiveDirectory";ModuleVersion="2.11.0.0"}
+    import-DSCresource -ModuleName PSDesiredStateConfiguration,@{ModuleName="xActiveDirectory";ModuleVersion="2.11.0.0"},@{ModuleName="XADCSDeployment";ModuleVersion="1.0.0.0"}
 
     node $AllNodes.NodeName
     {
@@ -53,14 +54,30 @@ param (
         xADDomain FirstDC
         {
             DomainName = $Node.Domain
-            DomainAdministratorCredential = $DACredential
+            DomainAdministratorCredential = $EACredential
             SafemodeAdministratorPassword = $SafeModeAdminPW
             DatabasePath = $Node.DCDatabasePath
             LogPath = $Node.DCLogPath
             SysvolPath = $Node.SysvolPath 
             DependsOn = '[WindowsFeature]ADDS'
-        }         
+        }      
+        
+        xAdcsCertificationAuthority ADCS
+        {
+            CAType = 'EnterpriseRootCA'
+            Credential = $EACredential
+            CryptoProviderName = 'RSA#Microsoft Software Key Storage Provider'
+            HashAlgorithmName = 'SHA256'
+            KeyLength = 2048
+            CACommonName = "blahblahblah root"
+            CADistinguishedNameSuffix = "C=US,L=Somecity,S=Pennsylvania,O=Test Corp"
+            DatabaseDirectory = 'C:\windows\system32\CertLog'
+            LogDirectory = 'C:\CA_Logs'
+            ValidityPeriod = 'Years'
+            ValidityPeriodUnits = 2
+            DependsOn = '[xADDomain]FirstDC'    
+        }
     }
 }
 
-LabInfraBuild -configurationData $ConfigData -outputpath "C:\DSC\Config" -DACredential (get-credential -username "blah.com\administrator" -Message "DA for checking domain presence") -SafeModeAdminPW (get-credential -Username 'Password Only' -Message "Safe Mode Admin PW")
+LabInfraBuild -configurationData $ConfigData -outputpath "C:\DSC\Config" -EACredential (get-credential -username "blah.com\administrator" -Message "EA for ADCS/checking domain presence") -SafeModeAdminPW (get-credential -Username 'Password Only' -Message "Safe Mode Admin PW")
