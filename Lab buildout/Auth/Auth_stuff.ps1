@@ -26,3 +26,7 @@ Get-NetFirewallRule | Where-Object {$_.Name -match "vm-monitoring-icmpv4"} | Ena
 Set-Item WSMan:\localhost\Client\TrustedHosts -Value "*" -Force
 
 
+#Add or remove the authoring box to/from the domain
+Add-Computer -DomainName BLAH -Credential "BLAH\Administrator" 
+
+Remove-Computer -UnjoinDomainCredential "BLAH\Administrator" -WorkgroupName "Workgroup"

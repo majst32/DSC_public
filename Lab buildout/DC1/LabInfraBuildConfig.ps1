@@ -11,7 +11,7 @@
                     NodeName = "DC1"
                     Role = "AD_ADCS"
                     PSDSCAllowPlainTextPassword = $True
-                    PSDCSAllowDomainUser = $True
+                    PSDSCAllowDomainUser = $True
                 },
                 @{
                     NodeName = "Pull"
@@ -30,7 +30,7 @@ param (
     [pscredential]$SafeModeAdminPW
     )
 
-    import-DSCresource -ModuleName PSDesiredStateConfiguration,@{ModuleName="xActiveDirectory";ModuleVersion="2.11.0.0"},@{ModuleName="XADCSDeployment";ModuleVersion="1.0.0.0"}
+    import-DSCresource -ModuleName PSDesiredStateConfiguration,@{ModuleName="xActiveDirectory";ModuleVersion="2.11.0.0"},@{ModuleName="XADCSDeployment";ModuleVersion="1.0.0.1"}
 
     node $AllNodes.NodeName
     {
@@ -51,6 +51,7 @@ param (
            Name   = "AD-Domain-Services"
         }
 
+
         xADDomain FirstDC
         {
             DomainName = $Node.Domain
@@ -62,7 +63,13 @@ param (
             DependsOn = '[WindowsFeature]ADDS'
         }      
         
-        xAdcsCertificationAuthority ADCS
+        WindowsFeature ADCS
+        {
+            Ensure = "Present"
+            Name = "ADCS-Cert-Authority"
+            DependsOn = '[xADDomain]FirstDC'
+        }
+        xAdcsCertificationAuthority ADCSConfig
         {
             CAType = 'EnterpriseRootCA'
             Credential = $EACredential
@@ -75,7 +82,7 @@ param (
             LogDirectory = 'C:\CA_Logs'
             ValidityPeriod = 'Years'
             ValidityPeriodUnits = 2
-            DependsOn = '[xADDomain]FirstDC'    
+            DependsOn = '[WindowsFeature]ADCS','[xADDomain]FirstDC'    
         }
     }
 }
