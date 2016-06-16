@@ -39,7 +39,6 @@ param (
         {
             Ensure = "Absent"
             Name = "User-Interfaces-Infra"
-            IncludeAllSubFeature = $false
         } 
     }
     
@@ -63,6 +62,28 @@ param (
             DependsOn = '[WindowsFeature]ADDS'
         }      
         
+        xADOrganizationalUnit GroupsOU
+        {
+            Name = 'Groups'
+            Path = 'DC=blah,DC=com'
+            DependsOn = '[xADDomain]FirstDC'
+            Ensure = 'Present'
+            ProtectedFromAccidentalDeletion = $True
+            PsDscRunAsCredential = $EaCredential
+        }
+
+        xADGroup WebServerGroup
+        {
+            GroupName = 'Web Servers'
+            GroupScope = 'Global'
+            DependsOn = '[xADOrganizationalUnit]GroupsOU'
+            #Members = $AllNodes.Where{$_.Role -eq "PullServer"}.NodeName
+            PsDscRunAsCredential = $EACredential
+            Category = 'Security'
+            Path = "OU=Groups,DC=blah,DC=com"
+            Ensure = 'Present'
+        }
+
         WindowsFeature ADCS
         {
             Ensure = "Present"
