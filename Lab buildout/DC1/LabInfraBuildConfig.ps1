@@ -39,7 +39,7 @@ param (
         {
             Ensure = "Absent"
             Name = "User-Interfaces-Infra"
-            IncludeAllSubFeature = $True
+            IncludeAllSubFeature = $false
         } 
     }
     
