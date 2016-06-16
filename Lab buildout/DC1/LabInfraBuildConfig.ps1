@@ -62,13 +62,36 @@ param (
             SysvolPath = $Node.SysvolPath 
             DependsOn = '[WindowsFeature]ADDS'
         }      
-        
+
+         xADOrganizationalUnit GroupsOU
+        {
+            Name = 'Groups'
+            Path = 'DC=blah,DC=com'
+            DependsOn = '[xADDomain]FirstDC'
+            Ensure = 'Present'
+            ProtectedFromAccidentalDeletion = $True
+            Credential = $EaCredential
+        }
+
+         xADGroup WebServerGroup
+        {
+            GroupName = 'Web Servers'
+            GroupScope = 'Global'
+            DependsOn = '[xADOrganizationalUnit]GroupsOU'
+            #Members = $AllNodes.Where{$_.Role -eq "PullServer"}.NodeName
+            Credential = $EACredential
+            Category = 'Security'
+            Path = "OU=Groups,DC=blah,DC=com"
+            Ensure = 'Present'
+        }
+
         WindowsFeature ADCS
         {
             Ensure = "Present"
             Name = "ADCS-Cert-Authority"
             DependsOn = '[xADDomain]FirstDC'
         }
+
         xAdcsCertificationAuthority ADCSConfig
         {
             CAType = 'EnterpriseRootCA'
