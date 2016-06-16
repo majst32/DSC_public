@@ -29,4 +29,4 @@ Set-Item WSMan:\localhost\Client\TrustedHosts -Value "*" -Force
 #Add or remove the authoring box to/from the domain
 Add-Computer -DomainName BLAH -Credential "BLAH\Administrator" 
 
-Remove-Computer -UnjoinDomainCredential "BLAH\Administrator" -WorkgroupName "Workgroup"
+Remove-Computer -UnjoinDomainCredential "BLAH\Administrator" -WorkgroupName "Workgroup" -Force
