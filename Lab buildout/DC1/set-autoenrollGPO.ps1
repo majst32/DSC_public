@@ -1,6 +1,9 @@
 ﻿[cmdletbinding(SupportsShouldProcess=$True,ConfirmImpact='Medium')] 
 
-param()
+param(
+    [parameter(Mandatory=$True)]
+    [string] $DN
+    )
 
 #Check if GPO exists, create if it does not.
 try {
@@ -60,7 +63,7 @@ catch {
     $Null = Set-GPRegistryValue -Name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\Cryptography\AutoEnrollment" -ValueName "OfflineExpirationStoreNames" -value "MY" -Type String
     write-verbose "Set Offline Expiration Store Name to MY."
     }
-$Null = New-GPLink -name "PKI AutoEnroll" -Target "dc=blah,dc=com" -LinkEnabled Yes -ErrorAction SilentlyContinue
+$Null = New-GPLink -name "PKI AutoEnroll" -Target $DN -LinkEnabled Yes -ErrorAction SilentlyContinue
 write-verbose "GPO PKI AutoEnroll is linked."
 write-verbose "Script set-autoenrollGPO complete."
 #>

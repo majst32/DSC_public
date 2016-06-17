@@ -12,6 +12,7 @@
                     Role = "AD_ADCS"
                     PSDSCAllowPlainTextPassword = $True
                     PSDSCAllowDomainUser = $True
+                    DomainDN = "dc=blah,dc=com"
                 },
                 @{
                     NodeName = "Pull"
@@ -51,7 +52,12 @@ param (
            Name   = "AD-Domain-Services"
         }
 
-
+        WindowsFeature GPMC
+        {
+            Ensure = 'Present'
+            Name = 'GPMC'
+        }
+        
         xADDomain FirstDC
         {
             DomainName = $Node.Domain
@@ -85,6 +91,21 @@ param (
             Ensure = 'Present'
         }
 
+        script CreatePKIAEGpo
+        {
+            Credential = $EACredential
+            TestScript = 'if ((get-gpo -name "PKI AutoEnroll" -ErrorAction SilentlyContinue) -eq $Null) {
+                            write-verbose "PKI AutoEnroll Policy does not exist."
+                            return $False
+                            } 
+                          else {
+                          write-verbose "PKI AutoEnroll policy alreaady exists."
+                          return $True}'
+            SetScript = 'new-gpo -name "PKI AutoEnroll"'
+            GetScript = 'return (get-gpo -name "PKI AutoEnroll")'
+            DependsOn = '[xADDomain]FirstDC'
+        }
+        
         WindowsFeature ADCS
         {
             Ensure = "Present"
