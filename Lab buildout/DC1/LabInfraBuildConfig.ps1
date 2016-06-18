@@ -94,18 +94,106 @@ param (
         script CreatePKIAEGpo
         {
             Credential = $EACredential
-            TestScript = 'if ((get-gpo -name "PKI AutoEnroll" -ErrorAction SilentlyContinue) -eq $Null) {
-                            write-verbose "PKI AutoEnroll Policy does not exist."
-                            return $False
+            TestScript = {
+                            if ((get-gpo -name "PKI AutoEnroll" -ErrorAction SilentlyContinue) -eq $Null) {
+                                return $False
                             } 
-                          else {
-                          write-verbose "PKI AutoEnroll policy alreaady exists."
-                          return $True}'
-            SetScript = 'new-gpo -name "PKI AutoEnroll"'
-            GetScript = 'return (get-gpo -name "PKI AutoEnroll")'
+                            else {
+                                return $True}
+                        }
+            SetScript = {
+                            new-gpo -name "PKI AutoEnroll"
+                        }
+            GetScript = {
+                            return (get-gpo -name "PKI AutoEnroll" -ErrorAction SilentlyContinue)
+                        }
             DependsOn = '[xADDomain]FirstDC'
         }
         
+        script setAEGPRegSetting1
+        {
+            Credential = $EACredential
+            TestScript = {
+                            if ((Get-GPRegistryValue -name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\Cryptography\AutoEnrollment" -ValueName "AEPolicy" -ErrorAction SilentlyContinue).Value -eq 7) {
+                                return $True
+                            }
+                            else {
+                                return $False
+                            }
+                        }
+            SetScript = {
+                            Set-GPRegistryValue -name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\Cryptography\AutoEnrollment" -ValueName "AEPolicy" -Value 7 -Type DWord
+                        }
+            GetScript = {
+                            return (Get-GPRegistryValue -name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\Cryptography\AutoEnrollment" -ValueName "AEPolicy" -ErrorAction SilentlyContinue)
+                        }
+            DependsOn = '[Script]CreatePKIAEGpo'
+        }
+
+        script setAEGPRegSetting2 
+        {
+            Credential = $EACredential
+            TestScript = {
+                            if ((Get-GPRegistryValue -name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\Cryptography\AutoEnrollment" -ValueName "OfflineExpirationPercent" -ErrorAction SilentlyContinue).Value -eq 10) {
+                                return $True
+                                }
+                            else {
+                                return $False
+                                 }
+                         }
+            SetScript = {
+                            Set-GPRegistryValue -Name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\Cryptography\AutoEnrollment" -ValueName "OfflineExpirationPercent" -value 10 -Type DWord
+                        }
+            GetScript = {
+                            return (Get-GPRegistryValue -name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\Cryptography\AutoEnrollment" -ValueName "OfflineExpirationPercent")
+                        }
+            DependsOn = '[Script]setAEGPRegSetting1'
+
+        }
+                                  
+        script setAEGPRegSetting3
+        {
+            Credential = $EACredential
+            TestScript = {
+                            if ((Get-GPRegistryValue -Name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\Cryptography\AutoEnrollment" -ValueName "OfflineExpirationStoreNames" -ErrorAction SilentlyContinue).value -match "MY") {
+                                return $True
+                                }
+                            else {
+                                return $False
+                                }
+                        }
+            SetScript = {
+                            Set-GPRegistryValue -Name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\Cryptography\AutoEnrollment" -ValueName "OfflineExpirationStoreNames" -value "MY" -Type String
+                        }
+            GetScript = {
+                            return (Get-GPRegistryValue -Name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\Cryptography\AutoEnrollment" -ValueName "OfflineExpirationStoreNames" -ErrorAction SilentlyContinue)
+                        }
+            DependsOn = '[Script]setAEGPRegSetting2'
+        }
+      
+        Script SetAEGPLink
+        {
+            Credential = $EACredential
+            TestScript = {
+                            try {
+                                    set-GPLink -name "PKI AutoEnroll" -target $Using:Node.DomainDN -LinkEnabled Yes -ErrorAction silentlyContinue
+                                    return $True
+                                }
+                            catch
+                                {
+                                    return $False
+                                }
+                         }
+            SetScript = {
+                            New-GPLink -name "PKI AutoEnroll" -Target $Using:Node.DomainDN -LinkEnabled Yes 
+                        }
+            GetScript = {
+                            @{}
+                        }
+            DependsOn = '[Script]setAEGPRegSetting3'
+        }
+ #>                           
+                            
         WindowsFeature ADCS
         {
             Ensure = "Present"
