@@ -85,6 +85,24 @@ param (
 
  #end region - firewall rules   
 
+ #enable DSC Analytic Log for troubleshooting
+
+        Script DSCAnalyticLog
+        {
+            DependsOn = '[xFirewall]RemoteEvtLogFWRule3'
+            TestScript = {
+                            $status = wevtutil get-log “Microsoft-Windows-Dsc/Analytic”
+                            if ($status -contains "enabled: true") {return $True} else {return $False}
+                        }
+            SetScript = {
+                            wevtutil.exe set-log “Microsoft-Windows-Dsc/Analytic” /q:true /e:true
+                        }
+            getScript = {
+                            $Result = wevtutil get-log “Microsoft-Windows-Dsc/Analytic”
+                            return @{Result = $Result}
+                        }
+        }
+
         WindowsFeature ServerCore
         {
             Ensure = "Absent"
