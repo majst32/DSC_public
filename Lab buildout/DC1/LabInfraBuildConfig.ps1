@@ -42,6 +42,91 @@ param (
             Name = "User-Interfaces-Infra"
             IncludeAllSubFeature = $false
         } 
+
+#region - firewall rules
+
+        script vmpingFWRule 
+        {
+            TestScript = {
+                            $FW = Get-NetFirewallRule | Where-Object {$_.Name -match "vm-monitoring-icmpv4"} 
+                            if ($FW.Enabled -eq $False) {return $False} else {return $True}
+                         }
+            SetScript = 
+                         { 
+                            Get-NetFirewallRule | Where-Object {$_.Name -match "vm-monitoring-icmpv4"} | Enable-NetFirewallRule
+                         }
+            GetScript =  {
+                            $result = (Get-NetFirewallRule | Where-Object {$_.Name -match "vm-monitoring-icmpv4"})
+                            return @{Result = $result}
+                         }
+        }
+        
+        script SMBFWRule 
+        {
+            TestScript = {
+                            $FW = Get-NetFirewallRule | Where-Object {$_.Name -match "FPS-SMB-In-TCP"} 
+                            if ($FW.Enabled -eq $False) {return $False} else {return $True}
+                         }
+            SetScript = 
+                         { 
+                            Get-NetFirewallRule | Where-Object {$_.Name -match "FPS-SMB-In-TCP"} | Enable-NetFirewallRule
+                         }
+            GetScript =  {
+                            $result = (Get-NetFirewallRule | Where-Object {$_.Name -match "FPS-SMB-In-TCP"})
+                            return @{Result = $result}
+                         }
+        }       
+        
+        script RemoteEvtLogFWRule1 
+        {
+            TestScript = {
+                            $FW = Get-NetFirewallRule | Where-Object {$_.Name -match "RemoteEventLogSvc-In-TCP"} 
+                            if ($FW.Enabled -eq $False) {return $False} else {return $True}
+                         }
+            SetScript = 
+                         { 
+                            Get-NetFirewallRule | Where-Object {$_.Name -match "RemoteEventLogSvc-In-TCP"} | Enable-NetFirewallRule
+                         }
+            GetScript =  {
+                            $result = (Get-NetFirewallRule | Where-Object {$_.Name -match "RemoteEventLogSvc-In-TCP"})
+                            return @{Result = $result}
+                         }
+        }   
+        
+        script RemoteEvtLogFWRule2 
+        {
+            TestScript = {
+                            $FW = Get-NetFirewallRule | Where-Object {$_.Name -match "RemoteEventLogSvc-NP-In-TCP"} 
+                            if ($FW.Enabled -eq $False) {return $False} else {return $True}
+                         }
+            SetScript = 
+                         { 
+                            Get-NetFirewallRule | Where-Object {$_.Name -match "RemoteEventLogSvc-NP-In-TCP"} | Enable-NetFirewallRule
+                         }
+            GetScript =  {
+                            $result = (Get-NetFirewallRule | Where-Object {$_.Name -match "RemoteEventLogSvc-NP-In-TCP"})
+                            return @{Result = $result}
+                         }
+        }          
+        
+        script RemoteEvtLogFWRule3 
+        {
+            TestScript = {
+                            $FW = Get-NetFirewallRule | Where-Object {$_.Name -match "RemoteEventLogSvc-RPCSS-In-TCP"} 
+                            if ($FW.Enabled -eq $False) {return $False} else {return $True}
+                         }
+            SetScript = 
+                         { 
+                            Get-NetFirewallRule | Where-Object {$_.Name -match "RemoteEventLogSvc-RPCSS-In-TCP"} | Enable-NetFirewallRule
+                         }
+            GetScript =  {
+                            $result = (Get-NetFirewallRule | Where-Object {$_.Name -match "RemoteEventLogSvc-RPCSS-In-TCP"})
+                            return @{Result = $result}
+                         }
+        }   
+
+ #end region - firewall rules                                                                     
+
     }
     
     node $AllNodes.Where{$_.Role -eq "AD_ADCS"}.NodeName {
@@ -57,6 +142,8 @@ param (
             Ensure = 'Present'
             Name = 'GPMC'
         }
+ 
+ #DCPromo
         
         xADDomain FirstDC
         {
@@ -69,6 +156,8 @@ param (
             DependsOn = '[WindowsFeature]ADDS'
         }      
 
+# Add OU for groups
+
          xADOrganizationalUnit GroupsOU
         {
             Name = 'Groups'
@@ -78,6 +167,8 @@ param (
             ProtectedFromAccidentalDeletion = $True
             Credential = $EaCredential
         }
+
+#Add Web Servers group - add pull server as member later
 
          xADGroup WebServerGroup
         {
@@ -91,6 +182,7 @@ param (
             Ensure = 'Present'
         }
 
+#region - Add GPO for PKI AutoEnroll
         script CreatePKIAEGpo
         {
             Credential = $EACredential
@@ -105,7 +197,8 @@ param (
                             new-gpo -name "PKI AutoEnroll"
                         }
             GetScript = {
-                            return (get-gpo -name "PKI AutoEnroll" -ErrorAction SilentlyContinue)
+                            $GPO= (get-gpo -name "PKI AutoEnroll")
+                            return @{Result = $GPO}
                         }
             DependsOn = '[xADDomain]FirstDC'
         }
@@ -125,7 +218,8 @@ param (
                             Set-GPRegistryValue -name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\Cryptography\AutoEnrollment" -ValueName "AEPolicy" -Value 7 -Type DWord
                         }
             GetScript = {
-                            return (Get-GPRegistryValue -name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\Cryptography\AutoEnrollment" -ValueName "AEPolicy" -ErrorAction SilentlyContinue)
+                            $RegVal1 = (Get-GPRegistryValue -name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\Cryptography\AutoEnrollment" -ValueName "AEPolicy")
+                            return @{Result = $RegVal1}
                         }
             DependsOn = '[Script]CreatePKIAEGpo'
         }
@@ -145,7 +239,8 @@ param (
                             Set-GPRegistryValue -Name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\Cryptography\AutoEnrollment" -ValueName "OfflineExpirationPercent" -value 10 -Type DWord
                         }
             GetScript = {
-                            return (Get-GPRegistryValue -name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\Cryptography\AutoEnrollment" -ValueName "OfflineExpirationPercent")
+                            $Regval2 = (Get-GPRegistryValue -name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\Cryptography\AutoEnrollment" -ValueName "OfflineExpirationPercent")
+                            return @{Result = $RegVal2}
                         }
             DependsOn = '[Script]setAEGPRegSetting1'
 
@@ -166,7 +261,8 @@ param (
                             Set-GPRegistryValue -Name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\Cryptography\AutoEnrollment" -ValueName "OfflineExpirationStoreNames" -value "MY" -Type String
                         }
             GetScript = {
-                            return (Get-GPRegistryValue -Name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\Cryptography\AutoEnrollment" -ValueName "OfflineExpirationStoreNames" -ErrorAction SilentlyContinue)
+                            $RegVal3 = (Get-GPRegistryValue -Name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\Cryptography\AutoEnrollment" -ValueName "OfflineExpirationStoreNames")
+                            return @{Result = $RegVal3}
                         }
             DependsOn = '[Script]setAEGPRegSetting2'
         }
@@ -188,11 +284,15 @@ param (
                             New-GPLink -name "PKI AutoEnroll" -Target $Using:Node.DomainDN -LinkEnabled Yes 
                         }
             GetScript = {
-                            @{}
+                            $GPLink = set-GPLink -name "PKI AutoEnroll" -target $Using:Node.DomainDN
+                            return @{Result = $GPLink}
                         }
             DependsOn = '[Script]setAEGPRegSetting3'
-        }
- #>                           
+        }                           
+
+#end region - Add GPO for PKI AutoEnroll
+ 
+#region - ADCS
                             
         WindowsFeature ADCS
         {
@@ -216,6 +316,9 @@ param (
             ValidityPeriodUnits = 2
             DependsOn = '[WindowsFeature]ADCS','[xADDomain]FirstDC'    
         }
+
+#end region - ADCS
+
     }
 }
 
