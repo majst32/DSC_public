@@ -31,102 +31,68 @@ param (
     [pscredential]$SafeModeAdminPW
     )
 
-    import-DSCresource -ModuleName PSDesiredStateConfiguration,@{ModuleName="xActiveDirectory";ModuleVersion="2.11.0.0"},@{ModuleName="XADCSDeployment";ModuleVersion="1.0.0.1"}
+    import-DSCresource -ModuleName PSDesiredStateConfiguration,@{ModuleName="xActiveDirectory";ModuleVersion="2.11.0.0"},@{ModuleName="xNetworking";ModuleVersion="2.9.0.0"},@{ModuleName="XADCSDeployment";ModuleVersion="1.0.0.1"}
 
     node $AllNodes.NodeName
     {
        
+#region - firewall rules
+
+        xFirewall vmpingFWRule
+        {
+            Name = 'vm-monitoring-icmpv4'
+            Action = 'Allow'
+            Direction = 'Inbound'
+            Enabled = $True
+            Ensure = 'Present'
+        }
+        
+        xFirewall SMB
+        {
+            Name = 'FPS-SMB-In-TCP'
+            Action = 'Allow'
+            Direction = 'Inbound'
+            Enabled = $True
+            Ensure = 'Present'
+        }
+
+        xFirewall RemoteEvtLogFWRule1
+        {
+            Name = "RemoteEventLogSvc-In-TCP"
+            Action = "Allow"
+            Direction = 'Inbound'
+            Enabled = $True
+            Ensure = 'Present'
+        }
+
+        xFirewall RemoteEvtLogFWRule2
+        {
+            Name = "RemoteEventLogSvc-NP-In-TCP"
+            Action = "Allow"
+            Direction = 'Inbound'
+            Enabled = $True
+            Ensure = 'Present'
+        }
+
+        xFirewall RemoteEvtLogFWRule3
+        {
+            Name = "RemoteEventLogSvc-RPCSS-In-TCP"
+            Action = "Allow"
+            Direction = 'Inbound'
+            Enabled = $True
+            Ensure = 'Present'
+        }
+
+ #end region - firewall rules   
+
         WindowsFeature ServerCore
         {
             Ensure = "Absent"
             Name = "User-Interfaces-Infra"
             IncludeAllSubFeature = $false
+            DependsOn = '[xFirewall]vmpingFWRule','[xFirewall]SMB','[xFirewall]RemoteEvtLogFWRule1','[xFirewall]RemoteEvtLogFWRule2','[xFirewall]RemoteEvtLogFWRule3'
         } 
-
-#region - firewall rules
-
-        script vmpingFWRule 
-        {
-            TestScript = {
-                            $FW = Get-NetFirewallRule | Where-Object {$_.Name -match "vm-monitoring-icmpv4"} 
-                            if ($FW.Enabled -eq $False) {return $False} else {return $True}
-                         }
-            SetScript = 
-                         { 
-                            Get-NetFirewallRule | Where-Object {$_.Name -match "vm-monitoring-icmpv4"} | Enable-NetFirewallRule
-                         }
-            GetScript =  {
-                            $result = (Get-NetFirewallRule | Where-Object {$_.Name -match "vm-monitoring-icmpv4"})
-                            return @{Result = $result}
-                         }
-        }
-        
-        script SMBFWRule 
-        {
-            TestScript = {
-                            $FW = Get-NetFirewallRule | Where-Object {$_.Name -match "FPS-SMB-In-TCP"} 
-                            if ($FW.Enabled -eq $False) {return $False} else {return $True}
-                         }
-            SetScript = 
-                         { 
-                            Get-NetFirewallRule | Where-Object {$_.Name -match "FPS-SMB-In-TCP"} | Enable-NetFirewallRule
-                         }
-            GetScript =  {
-                            $result = (Get-NetFirewallRule | Where-Object {$_.Name -match "FPS-SMB-In-TCP"})
-                            return @{Result = $result}
-                         }
-        }       
-        
-        script RemoteEvtLogFWRule1 
-        {
-            TestScript = {
-                            $FW = Get-NetFirewallRule | Where-Object {$_.Name -match "RemoteEventLogSvc-In-TCP"} 
-                            if ($FW.Enabled -eq $False) {return $False} else {return $True}
-                         }
-            SetScript = 
-                         { 
-                            Get-NetFirewallRule | Where-Object {$_.Name -match "RemoteEventLogSvc-In-TCP"} | Enable-NetFirewallRule
-                         }
-            GetScript =  {
-                            $result = (Get-NetFirewallRule | Where-Object {$_.Name -match "RemoteEventLogSvc-In-TCP"})
-                            return @{Result = $result}
-                         }
-        }   
-        
-        script RemoteEvtLogFWRule2 
-        {
-            TestScript = {
-                            $FW = Get-NetFirewallRule | Where-Object {$_.Name -match "RemoteEventLogSvc-NP-In-TCP"} 
-                            if ($FW.Enabled -eq $False) {return $False} else {return $True}
-                         }
-            SetScript = 
-                         { 
-                            Get-NetFirewallRule | Where-Object {$_.Name -match "RemoteEventLogSvc-NP-In-TCP"} | Enable-NetFirewallRule
-                         }
-            GetScript =  {
-                            $result = (Get-NetFirewallRule | Where-Object {$_.Name -match "RemoteEventLogSvc-NP-In-TCP"})
-                            return @{Result = $result}
-                         }
-        }          
-        
-        script RemoteEvtLogFWRule3 
-        {
-            TestScript = {
-                            $FW = Get-NetFirewallRule | Where-Object {$_.Name -match "RemoteEventLogSvc-RPCSS-In-TCP"} 
-                            if ($FW.Enabled -eq $False) {return $False} else {return $True}
-                         }
-            SetScript = 
-                         { 
-                            Get-NetFirewallRule | Where-Object {$_.Name -match "RemoteEventLogSvc-RPCSS-In-TCP"} | Enable-NetFirewallRule
-                         }
-            GetScript =  {
-                            $result = (Get-NetFirewallRule | Where-Object {$_.Name -match "RemoteEventLogSvc-RPCSS-In-TCP"})
-                            return @{Result = $result}
-                         }
-        }   
-
- #end region - firewall rules                                                                     
-
+                                                              
     }
     
     node $AllNodes.Where{$_.Role -eq "AD_ADCS"}.NodeName {
@@ -135,12 +101,14 @@ param (
         {
            Ensure = "Present"
            Name   = "AD-Domain-Services"
+           DependsOn = '[WindowsFeature]ServerCore'
         }
 
         WindowsFeature GPMC
         {
             Ensure = 'Present'
             Name = 'GPMC'
+            DependsOn = '[WindowsFeature]ServerCore'
         }
  
  #DCPromo
