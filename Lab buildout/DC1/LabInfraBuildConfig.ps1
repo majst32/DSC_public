@@ -3,16 +3,20 @@
                 @{
                     NodeName = "*"
                     Domain = "blah.com"
-                    DCDatabasePath = "C:\NTDS"
-                    DCLogPath = "C:\NTDS"
-                    SysvolPath = "C:\Sysvol" 
+                    DomainDN = "dc=blah,dc=com"
                 },
                 @{
                     NodeName = "DC1"
                     Role = "AD_ADCS"
                     PSDSCAllowPlainTextPassword = $True
                     PSDSCAllowDomainUser = $True
-                    DomainDN = "dc=blah,dc=com"
+                    DCDatabasePath = "C:\NTDS"
+                    DCLogPath = "C:\NTDS"
+                    SysvolPath = "C:\Sysvol"
+                    CACN = "blahblahblah root"
+                    CADNSuffix = "C=US,L=Somecity,S=Pennsylvania,O=Test Corp"
+                    CADatabasePath = "C:\windows\system32\CertLog"
+                    CALogPath = "C:\CA_Logs"
                 },
                 @{
                     NodeName = "Pull"
@@ -147,7 +151,7 @@ param (
          xADOrganizationalUnit GroupsOU
         {
             Name = 'Groups'
-            Path = 'DC=blah,DC=com'
+            Path = $Node.DomainDN
             DependsOn = '[xADDomain]FirstDC'
             Ensure = 'Present'
             ProtectedFromAccidentalDeletion = $True
@@ -164,7 +168,7 @@ param (
             #Members = $AllNodes.Where{$_.Role -eq "PullServer"}.NodeName
             Credential = $EACredential
             Category = 'Security'
-            Path = "OU=Groups,DC=blah,DC=com"
+            Path = "OU=Groups,$($Node.DomainDN)"
             Ensure = 'Present'
         }
 
@@ -294,10 +298,10 @@ param (
             CryptoProviderName = 'RSA#Microsoft Software Key Storage Provider'
             HashAlgorithmName = 'SHA256'
             KeyLength = 2048
-            CACommonName = "blahblahblah root"
-            CADistinguishedNameSuffix = "C=US,L=Somecity,S=Pennsylvania,O=Test Corp"
-            DatabaseDirectory = 'C:\windows\system32\CertLog'
-            LogDirectory = 'C:\CA_Logs'
+            CACommonName = $Node.CACN
+            CADistinguishedNameSuffix = $Node.CADNSuffix
+            DatabaseDirectory = $Node.CADatabasePath
+            LogDirectory = $Node.CALogPath
             ValidityPeriod = 'Years'
             ValidityPeriodUnits = 2
             DependsOn = '[WindowsFeature]ADCS','[xADDomain]FirstDC'    
