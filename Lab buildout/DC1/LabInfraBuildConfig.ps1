@@ -22,6 +22,8 @@
                 @{
                     NodeName = "Pull"
                     Role = "PullServer"
+                    PSDSCAllowPlainTextPassword = $True
+                    PSDSCAllowDomainUser = $True
                 }
             )
         }
@@ -330,6 +332,8 @@ param (
 
     node $AllNodes.Where{$_.Role -eq "PullServer"}.NodeName {
 
+    #Doesn't work yet
+
         WaitForAny WaitforAD
         {
             NodeName = 'DC1'
@@ -337,6 +341,15 @@ param (
             RetryIntervalSec = 60
             RetryCount = 30
         } 
+
+        xComputer JoinPullToDomain
+        {
+            Name = $Node.NodeName
+            DomainName = $Node.Domain
+            DependsOn = '[WaitForAny]WaitforAD'
+            JoinOU = $Node.ServersOU
+            Credential = $EACredential
+        }
 
      }   
 }

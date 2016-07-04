@@ -15,4 +15,3 @@ Get-NetFirewallRule | Where-Object {$_.Name -match "FPS-SMB-In-TCP"} | Enable-Ne
 rename-computer -ComputerName $env:ComputerName -NewName $NewName -Restart
 
 }
-set-ServerCommunication -NewName DC1

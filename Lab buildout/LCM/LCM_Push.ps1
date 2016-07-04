@@ -15,4 +15,3 @@ Configuration LCM_Push {
         }
     }
 
-LCM_Push -computerName DC1 -OutputPath "C:\DSC\LCM"
