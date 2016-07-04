@@ -4,6 +4,7 @@
                     NodeName = "*"
                     Domain = "blah.com"
                     DomainDN = "dc=blah,dc=com"
+                    ServersOU = 'OU=Servers,dc=blah,dc=com'
                 },
                 @{
                     NodeName = "DC1"
@@ -35,7 +36,11 @@ param (
     [pscredential]$SafeModeAdminPW
     )
 
-    import-DSCresource -ModuleName PSDesiredStateConfiguration,@{ModuleName="xActiveDirectory";ModuleVersion="2.11.0.0"},@{ModuleName="xNetworking";ModuleVersion="2.9.0.0"},@{ModuleName="XADCSDeployment";ModuleVersion="1.0.0.1"}
+    import-DSCresource -ModuleName PSDesiredStateConfiguration,
+        @{ModuleName="xActiveDirectory";ModuleVersion="2.11.0.0"},
+        @{ModuleName="xNetworking";ModuleVersion="2.9.0.0"},
+        @{ModuleName="XADCSDeployment";ModuleVersion="1.0.0.1"},
+        @{ModuleName="xComputerManagement";ModuleVersion="1.6.0.0"}
 
     node $AllNodes.NodeName
     {
@@ -151,6 +156,18 @@ param (
          xADOrganizationalUnit GroupsOU
         {
             Name = 'Groups'
+            Path = $Node.DomainDN
+            DependsOn = '[xADDomain]FirstDC'
+            Ensure = 'Present'
+            ProtectedFromAccidentalDeletion = $True
+            Credential = $EaCredential
+        }
+
+# Add OU for Member Servers
+
+         xADOrganizationalUnit ServersOU
+        {
+            Name = 'Servers'
             Path = $Node.DomainDN
             DependsOn = '[xADDomain]FirstDC'
             Ensure = 'Present'
@@ -310,6 +327,18 @@ param (
 #end region - ADCS
 
     }
+
+    node $AllNodes.Where{$_.Role -eq "PullServer"}.NodeName {
+
+        WaitForAny WaitforAD
+        {
+            NodeName = 'DC1'
+            ResourceName = '[xADDomain]FirstDC'
+            RetryIntervalSec = 60
+            RetryCount = 30
+        } 
+
+     }   
 }
 
 LabInfraBuild -configurationData $ConfigData -outputpath "C:\DSC\Config" -EACredential (get-credential -username "blah.com\administrator" -Message "EA for ADCS/checking domain presence") -SafeModeAdminPW (get-credential -Username 'Password Only' -Message "Safe Mode Admin PW")
