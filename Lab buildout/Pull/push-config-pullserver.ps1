@@ -8,5 +8,5 @@ copy-item "C:\Program Files\WindowsPowershell\Modules\xNetworking" -Destination 
 Copy-Item "C:\Program Files\WindowsPowershell\Modules\xComputerManagement" -Destination "\\Pull\C$\Program Files\WindowsPowershell\Modules" -Recurse -Force
 
 Remove-DscConfigurationDocument -CimSession Pull -Stage Current
-Remove-DscConfigurationDocument -CimSession Pull -Stage Pending
+Remove-DscConfigurationDocument -CimSession Pull -Stage Pending 
 Start-DscConfiguration -ComputerName Pull -Path "C:\DSC\Config" -Verbose -wait -Force

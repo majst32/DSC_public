@@ -24,6 +24,7 @@
                     Role = "PullServer"
                     PSDSCAllowPlainTextPassword = $True
                     PSDSCAllowDomainUser = $True
+                    DNSServerIP = '192.168.2.11'
                 }
             )
         }
@@ -332,12 +333,16 @@ param (
 
     node $AllNodes.Where{$_.Role -eq "PullServer"}.NodeName {
 
-    #Doesn't work yet
-
-        WaitForAny WaitforAD
+        xDNSServerAddress SetDNSServer
         {
-            NodeName = 'DC1'
-            ResourceName = '[xADDomain]FirstDC'
+            Address = $Node.DNSServerIP
+            InterfaceAlias = 'Ethernet'
+            AddressFamily = 'IPv4'
+        }
+        
+        xWaitForADDomain WaitforAD
+        {
+            DomainName = $Node.Domain
             RetryIntervalSec = 60
             RetryCount = 30
         } 
@@ -346,7 +351,7 @@ param (
         {
             Name = $Node.NodeName
             DomainName = $Node.Domain
-            DependsOn = '[WaitForAny]WaitforAD'
+            DependsOn = '[xWaitForADDomain]WaitforAD'
             JoinOU = $Node.ServersOU
             Credential = $EACredential
         }
