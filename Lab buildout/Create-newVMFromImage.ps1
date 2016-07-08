@@ -2,8 +2,7 @@
 .SYNOPSIS
 Creates new vhdx file copied from Image specified, adds the server to Hyper-V, and boots it.
 .DESCRIPTION
-Creates new vhdx file copied from Image specified, adds the server to Hyper-V, and boots it.  
-A VHDX of the same name will be deleted and recreated from the image.
+Creates new vhdx file copied from Image specified, adds the server to Hyper-V, and boots it.  A VHDX of the same name will be deleted and recreated from the image.
 .PARAMETER InitialImage
 Path to the "Gold Image" or other VHDX file to copy.
 .PARAMETER VHDXPath
@@ -12,7 +11,7 @@ Path to the new server's VHDX.
 Name of server in Hyper-V
 .PARAMETER SwitchType
 Type of switch for new server to be attached to
-.EXAMPLES
+.EXAMPLE
 .\Create-newVMFromImage -InitialImage "C:\HyperV\GoldImage\2012.vhdx" -VHDXPath "C:\HyperV\VM\DC1.vhdx" -SwitchType Internal -verbose
 .NOTES
 Author - Melissa Januszko [mj] 6/1/16
