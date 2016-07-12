@@ -9,7 +9,9 @@ param (
 
     [parameter(Mandatory=$True)]
     [pscredential]$ADCreds
+
     )
+
 #need to enter-PSSession first 
 
 #May need this before DSC, to copy the modules.
@@ -21,11 +23,9 @@ Get-NetFirewallRule | Where-Object {$_.Name -like "*RemoteEventLogSvc*"} | Enabl
 wevtutil.exe set-log “Microsoft-Windows-Dsc/Analytic” /q:true /e:true
 
 #Rename and add to domain
-rename-computer -ComputerName $env:ComputerName -NewName $NewName
-add-computer -DomainName $Domain -Credential $ADCreds -restart
-
+Add-Computer -DomainName $Domain -OUPath "OU=Servers,DC=blah,DC=com" -Credential $ADCreds
+rename-computer -ComputerName $env:ComputerName -NewName $NewName -DomainCredential $ADCreds
+Restart-Computer
 }
 
-$Domain = "BLAH"
-$ADCreds = Get-Credential -Message "Enter Domain Credentials" -UserName "$Domain\Administrator"
-set-ServerCommunication -NewName Pull -domain $Domain -ADCreds $ADCreds
+set-ServerCommunication -NewName Pull -Domain "Blah.com" -ADCreds (Get-Credential -Message "Enter Domain credentials:")

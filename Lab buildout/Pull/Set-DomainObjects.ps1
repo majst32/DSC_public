@@ -1,5 +1,7 @@
 ﻿function set-DomainObjects {
 
+[cmdletbinding(SupportsShouldProcess=$True,ConfirmImpact='Medium')]
+
 param (
     [parameter(Mandatory=$True)]
     [string]$Domain,
@@ -18,14 +20,20 @@ try
         $CompObj = get-ADComputer -Identity $NewName
     }
 catch {
-    new-ADComputer -Name $NewName -sAMAccountName $NewName -DisplayName $NewName -DNSHostName "$NewName.($DomainObj.DNSRoot)" -Credential $ADCreds
+    Write-Verbose "Server $NewName not found."
     }
 
-$WSGroup = get-ADGroup -Identity "Web Servers" -Credential $ADCreds 
-Add-ADGroupMember -Identity $WSGroup -Members $CompObj.sAMAccountName -Credential $ADCreds
-Restart-Computer -ComputerName $NewName
+$WSGroup = get-ADGroup -Identity "Web Servers" -Credential $ADCreds -Properties *
+try {
+    Add-ADGroupMember -Identity $WSGroup -Members $CompObj.DistinguishedName -Credential $ADCreds
+    Restart-Computer -ComputerName $NewName -Credential $ADCreds -Protocol WSMan -WsmanAuthentication Kerberos
+    }
+
+catch {
+    write-verbose "Server not added to Web Servers Group."
+    }
 }
 
 $Domain = "BLAH"
 $ADCreds = Get-Credential -Message "Enter Domain Credentials" -UserName "$Domain\Administrator"
-set-DomainObjects -Domain $Domain -ADCreds $ADCreds -NewName Pull
+set-DomainObjects -Domain $Domain -ADCreds $ADCreds -NewName Pull -Verbose
