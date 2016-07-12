@@ -14,4 +14,4 @@ Configuration LCM_Push {
             }
         }
     }
-
+LCM_Push -computername DC1

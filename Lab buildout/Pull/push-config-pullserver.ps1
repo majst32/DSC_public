@@ -1,4 +1,11 @@
 ﻿#push DC server config
+cd 'C:\Powershell\DSC_public\Lab buildout\Pull'
+
+enter-pssession Pull
+#open set-servercommunication and run it
+Exit-PSSession
+
+.\set-DomainObjects 
 
 Set-DscLocalConfigurationManager -ComputerName Pull -Path "C:\DSC\LCM" -Verbose -Force
 

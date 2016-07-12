@@ -5,6 +5,7 @@ foreach ($IP in $IPInfo) {
     if ($IP.IPAddress.toString() -like "169.254*") {
         new-NetIPAddress -IPAddress "192.168.2.$StartIP" -InterfaceIndex $IP.InterfaceIndex -PrefixLength 24
         $StartIP++
+        Set-DnsClientServerAddress -InterfaceIndex $IP.InterfaceIndex -ServerAddresses 192.168.2.11
         }
     }
 
