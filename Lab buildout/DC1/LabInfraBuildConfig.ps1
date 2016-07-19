@@ -281,15 +281,15 @@ param (
         {
             Credential = $EACredential
             TestScript = {
-                            try {
-                                    set-GPLink -name "PKI AutoEnroll" -target $Using:Node.DomainDN -LinkEnabled Yes -ErrorAction silentlyContinue
-                                    return $True
+                            if (([xml](Get-GPOReport -Name "PKI AutoEnroll" -ReportType XML)).GPO.LinksTo.SOMPath -match "blah.com") {
+                                write-output "Group policy PKI Autoenroll already linked to domain."
+                                return $True
                                 }
-                            catch
-                                {
-                                    return $False
+                            else {
+                                write-output "Group policy PKI Autoenroll not linked at domain level."
+                                return $False
                                 }
-                         }
+                        }
             SetScript = {
                             New-GPLink -name "PKI AutoEnroll" -Target $Using:Node.DomainDN -LinkEnabled Yes 
                         }
