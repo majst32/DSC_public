@@ -281,7 +281,7 @@ param (
         {
             Credential = $EACredential
             TestScript = {
-                            if (([xml](Get-GPOReport -Name "PKI AutoEnroll" -ReportType XML)).GPO.LinksTo.SOMPath -match "blah.com") {
+                            if (([xml](Get-GPOReport -Name "PKI AutoEnroll" -ReportType XML)).GPO.LinksTo.SOMPath -match $Using:Node.Domain) {
                                 write-output "Group policy PKI Autoenroll already linked to domain."
                                 return $True
                                 }
@@ -327,6 +327,69 @@ param (
             DependsOn = '[WindowsFeature]ADCS','[xADDomain]FirstDC'    
         }
 
+#Note:  The Test section is pure laziness.  Future enhancement:  test for more than just existence.
+        script CreateWebServer2Template
+        {
+            Credential = $EACredential
+            TestScript = {
+                            try {
+                                $WSTemplate=get-ADObject -Identity "CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" -Properties * -ErrorAction Stop
+                                {return $True}
+                                }
+                            catch {
+                                return $False
+                                }
+                         }
+            SetScript = {
+                         $WebServerTemplate = @{'flags'='131649';
+                        'msPKI-Cert-Template-OID'='1.3.6.1.4.1.311.21.8.8211880.1779723.5195193.12600017.10487781.44.7319704.6725493';
+                        'msPKI-Certificate-Application-Policy'='1.3.6.1.5.5.7.3.1';
+                        'msPKI-Certificate-Name-Flag'='268435456';
+                        'msPKI-Enrollment-Flag'='32';
+                        'msPKI-Minimal-Key-Size'='2048';
+                        'msPKI-Private-Key-Flag'='50659328';
+                        'msPKI-RA-Signature'='0';
+                        'msPKI-Supersede-Templates'='WebServer';
+                        'msPKI-Template-Minor-Revision'='3';
+                        'msPKI-Template-Schema-Version'='2';
+                        'pKICriticalExtensions'='2.5.29.15';
+                        'pKIDefaultCSPs'='2,Microsoft DH SChannel Cryptographic Provider','1,Microsoft RSA SChannel Cryptographic Provider';
+                        'pKIDefaultKeySpec'='1';
+                        'pKIExtendedKeyUsage'='1.3.6.1.5.5.7.3.1';
+                        'pKIMaxIssuingDepth'='0';
+                        'revision'='100'}
+
+
+                        New-ADObject -name "WebServer2" -Type pKICertificateTemplate -Path "CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" -DisplayName WebServer2 -OtherAttributes $WebServerTemplate
+                        $WSOrig = Get-ADObject -Identity "CN=WebServer,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" -Properties * | Select-Object pkiExpirationPeriod,pkiOverlapPeriod,pkiKeyUsage
+                        Get-ADObject -Identity "CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" | Set-ADObject -Add @{'pKIKeyUsage'=$WSOrig.pKIKeyUsage;'pKIExpirationPeriod'=$WSOrig.pKIExpirationPeriod;'pkiOverlapPeriod'=$WSOrig.pKIOverlapPeriod}
+                        }
+                GetScript = {
+                                try {
+                                    return {get-ADObject -Identity "CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" -Properties * -ErrorAction Stop}
+                                    }
+                                catch {
+                                    return @{Result=$Null}
+                                    }
+                            }
+        }
+         
+        script PublishWebServerTemplate2 
+        {       
+           Credential = $EACredential
+           TestScript = {
+                            $Template= Get-CATemplate | Where-Object {$_.Name -match "WebServer2"}
+                            if ($Template -eq $Null) {return $False}
+                            else {return $True}
+                        }
+           SetScript = {
+                            add-CATemplate -name "WebServer2" -force
+                        }
+           GetScript = {
+                            return {Get-CATemplate | Where-Object {$_.Name -match "WebServer2"}}
+                        }
+         }
+                                                     
 
 #end region - ADCS
 
@@ -338,7 +401,7 @@ param (
             Credential = $EACredential
             TestScript = {
                 Import-Module activedirectory
-                $WebServerCertACL = (get-acl "AD:CN=WebServer,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
+                $WebServerCertACL = (get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
                 if ($WebServerCertACL -eq $Null) {
                     write-verbose "Web Servers Group does not have permissions on Web Server template"
                     Return $False
@@ -356,16 +419,16 @@ param (
                 Import-Module activedirectory
                 $WebServersGroup = get-adgroup -Identity "Web Servers" | Select-Object SID
                 $EnrollGUID = [GUID]::Parse("a05b8cc2-17bc-4802-a710-e7c15ab866a2")
-                $ACL = get-acl "AD:CN=WebServer,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com"
+                $ACL = get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com"
                 $ACL.AddAccessRule((New-Object System.DirectoryServices.ExtendedRightAccessRule $WebServersGroup.SID,'Allow',$EnrollGUID,'None'))
                 #$ACL.AddAccessRule((New-Object System.DirectoryServices.ActiveDirectoryAccessRule $WebServersGroup.SID,'ReadProperty','Allow'))
                 #$ACL.AddAccessRule((New-Object System.DirectoryServices.ActiveDirectoryAccessRule $WebServersGroup.SID,'GenericExecute','Allow'))
-                set-ACL "AD:CN=WebServer,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" -AclObject $ACL
+                set-ACL "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" -AclObject $ACL
                 write-verbose "AutoEnroll permissions set for Web Servers Group"
                 }
              GetScript = {
                 Import-Module activedirectory
-                $WebServerCertACL = (get-acl "AD:CN=WebServer,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
+                $WebServerCertACL = (get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
                 if ($WebServerCertACL -ne $Null) {
                     return $WebServerCertACL
                     }
@@ -381,7 +444,7 @@ param (
             Credential = $EACredential
             TestScript = {
                 Import-Module activedirectory
-                $WebServerCertACL = (get-acl "AD:CN=WebServer,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
+                $WebServerCertACL = (get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
                 if ($WebServerCertACL -eq $Null) {
                     write-verbose "Web Servers Group does not have permissions on Web Server template"
                     Return $False
@@ -399,16 +462,16 @@ param (
                 Import-Module activedirectory
                 $WebServersGroup = get-adgroup -Identity "Web Servers" | Select-Object SID
                 $EnrollGUID = [GUID]::Parse("0e10c968-78fb-11d2-90d4-00c04f79dc55")
-                $ACL = get-acl "AD:CN=WebServer,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com"
+                $ACL = get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com"
                 $ACL.AddAccessRule((New-Object System.DirectoryServices.ExtendedRightAccessRule $WebServersGroup.SID,'Allow',$EnrollGUID,'None'))
                 #$ACL.AddAccessRule((New-Object System.DirectoryServices.ActiveDirectoryAccessRule $WebServersGroup.SID,'ReadProperty','Allow'))
                 #$ACL.AddAccessRule((New-Object System.DirectoryServices.ActiveDirectoryAccessRule $WebServersGroup.SID,'GenericExecute','Allow'))
-                set-ACL "AD:CN=WebServer,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" -AclObject $ACL
+                set-ACL "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" -AclObject $ACL
                 write-verbose "Enroll permissions set for Web Servers Group"
                 }
              GetScript = {
                 Import-Module activedirectory
-                $WebServerCertACL = (get-acl "AD:CN=WebServer,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
+                $WebServerCertACL = (get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
                 if ($WebServerCertACL -ne $Null) {
                     return $WebServerCertACL
                     }
