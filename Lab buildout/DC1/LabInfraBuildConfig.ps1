@@ -330,11 +330,12 @@ param (
 #Note:  The Test section is pure laziness.  Future enhancement:  test for more than just existence.
         script CreateWebServer2Template
         {
+            DependsOn = '[xAdcsCertificationAuthority]ADCSConfig'
             Credential = $EACredential
             TestScript = {
                             try {
                                 $WSTemplate=get-ADObject -Identity "CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" -Properties * -ErrorAction Stop
-                                {return $True}
+                                return $True
                                 }
                             catch {
                                 return $False
@@ -376,6 +377,7 @@ param (
          
         script PublishWebServerTemplate2 
         {       
+           DependsOn = '[Script]CreateWebServer2Template'
            Credential = $EACredential
            TestScript = {
                             $Template= Get-CATemplate | Where-Object {$_.Name -match "WebServer2"}
@@ -397,7 +399,7 @@ param (
 
         script SetWebServerTemplateAutoenroll
         {
-            DependsOn = '[xAdcsCertificationAuthority]ADCSConfig'
+            DependsOn = '[Script]CreateWebServer2Template'
             Credential = $EACredential
             TestScript = {
                 Import-Module activedirectory
@@ -440,7 +442,7 @@ param (
             
     script SetWebServerTemplateEnroll
         {
-            DependsOn = '[xAdcsCertificationAuthority]ADCSConfig'
+            DependsOn = '[Script]CreateWebServer2Template'
             Credential = $EACredential
             TestScript = {
                 Import-Module activedirectory
@@ -480,10 +482,7 @@ param (
                     }
                 }
          }
-
     }
-
-    
 
     node $AllNodes.Where{$_.Role -eq "PullServer"}.NodeName {
 
