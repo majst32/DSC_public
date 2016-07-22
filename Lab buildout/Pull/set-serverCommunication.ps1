@@ -12,7 +12,7 @@ param (
 
     )
 
-#need to enter-PSSession first 
+#need to enter-PSSession first, WITH CREDS!!
 
 #May need this before DSC, to copy the modules.
 Get-NetFirewallRule | Where-Object {$_.Name -match "FPS-SMB-In-TCP"} | Enable-NetFirewallRule
@@ -22,9 +22,13 @@ Get-NetFirewallRule | Where-Object {$_.Name -match "vm-monitoring-icmpv4"} | Ena
 Get-NetFirewallRule | Where-Object {$_.Name -like "*RemoteEventLogSvc*"} | Enable-NetFirewallRule
 wevtutil.exe set-log “Microsoft-Windows-Dsc/Analytic” /q:true /e:true
 
+#Add RSAT-AD-Powershell
+if ((get-windowsFeature -name RSAT-AD-Powershell).installState -ne "Installed")
+    {Install-WindowsFeature RSAT-AD-Powershell}
+
 #Rename and add to domain
-Add-Computer -DomainName $Domain -OUPath "OU=Servers,DC=blah,DC=com" -Credential $ADCreds
-rename-computer -ComputerName $env:ComputerName -NewName $NewName -DomainCredential $ADCreds
+Add-Computer -DomainName $Domain -OUPath "OU=Servers,DC=blah,DC=com" -Credential $ADCreds -ErrorAction SilentlyContinue
+rename-computer -ComputerName $env:ComputerName -NewName $NewName -DomainCredential $ADCreds -ErrorAction SilentlyContinue
 Restart-Computer
 }
 

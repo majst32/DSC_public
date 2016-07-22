@@ -25,6 +25,7 @@
                     PSDSCAllowPlainTextPassword = $True
                     PSDSCAllowDomainUser = $True
                     DNSServerIP = '192.168.2.11'
+                    sAMAccountName = "Pull$"
                 }
             )
         }
@@ -178,6 +179,38 @@ param (
             Credential = $EaCredential
         }
 
+#Pre-add member servers to AD
+
+        $MbrSvrs = $AllNodes.Where{$_.NodeName -notmatch "DC1"}
+        foreach ($M in $MbrSvrs)
+            {
+            
+            script "AddMbrSvr_$($M.NodeName)" {
+                Credential = $EACredential
+                DependsOn = '[xADOrganizationalUnit]ServersOU'
+                TestScript = {
+                                try {
+                                    Get-ADComputer -Identity $Using:M.NodeName -ErrorAction Stop
+                                    Return $True
+                                    }
+                                catch {
+                                    return $False
+                                    }
+                            }
+                SetScript = {
+                                New-ADComputer -Name $Using:M.NodeName -path $Using:M.ServersOU
+                            }
+                GetScript = {
+                                try {
+                                    return (Get-ADComputer -Identity $Using:M.NodeName -ErrorAction Stop)
+                                    }
+                                catch {
+                                    return @{Result = $null}
+                                    }
+                            }
+                }
+            }
+
 #Add Web Servers group - add pull server as member later
 
          xADGroup WebServerGroup
@@ -185,7 +218,7 @@ param (
             GroupName = 'Web Servers'
             GroupScope = 'Global'
             DependsOn = '[xADOrganizationalUnit]GroupsOU'
-            #Members = $AllNodes.Where{$_.Role -eq "PullServer"}.NodeName
+            Members = $AllNodes.Where{$_.Role -eq "PullServer"}.sAMAccountName
             Credential = $EACredential
             Category = 'Security'
             Path = "OU=Groups,$($Node.DomainDN)"
@@ -508,6 +541,16 @@ param (
             JoinOU = $Node.ServersOU
             Credential = $EACredential
         }
+
+        WindowsFeature RSATADPowershell
+        {
+            Name = 'RSAT-AD-Powershell'
+            Ensure = 'Present'
+        }
+
+        #Placeholder - WaitForAny on the WebServerGroup Resource
+        #Placeholder - Another WebServerGroup Resource that adds the pull servers to the Members (when crypto template is in place)
+
 
      }   
 }
