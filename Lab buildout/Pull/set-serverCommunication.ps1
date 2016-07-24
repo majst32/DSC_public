@@ -27,9 +27,10 @@ if ((get-windowsFeature -name RSAT-AD-Powershell).installState -ne "Installed")
     {Install-WindowsFeature RSAT-AD-Powershell}
 
 #Rename and add to domain
-Add-Computer -DomainName $Domain -OUPath "OU=Servers,DC=blah,DC=com" -Credential $ADCreds -ErrorAction SilentlyContinue
-rename-computer -ComputerName $env:ComputerName -NewName $NewName -DomainCredential $ADCreds -ErrorAction SilentlyContinue
-Restart-Computer
+rename-computer -NewName $NewName
+start-sleep -seconds 5
+Add-Computer -DomainName $Domain -OUPath "OU=Servers,DC=blah,DC=com" -Credential $ADCreds -options JoinWithNewName -force -restart
+#Restart-Computer
 }
 
 set-ServerCommunication -NewName Pull -Domain "Blah.com" -ADCreds (Get-Credential -Message "Enter Domain credentials:")
