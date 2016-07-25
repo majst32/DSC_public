@@ -21,11 +21,17 @@
                 },
                 @{
                     NodeName = "Pull"
-                    Role = "PullServer"
-                    PSDSCAllowPlainTextPassword = $True
-                    PSDSCAllowDomainUser = $True
+                    Role = @('PullServer','Web')
                     DNSServerIP = '192.168.2.11'
                     sAMAccountName = "Pull$"
+                    PullServerEndPointName = 'PSDSCPullServer' 
+                    PullserverPort = 8080                       
+                    PullserverPhysicalPath = "$env:SystemDrive\inetpub\wwwroot\PSDSCPullServer" 
+                    PullserverModulePath = "$env:PROGRAMFILES\WindowsPowerShell\DscService\Modules" 
+                    PullServerConfigurationPath = "$env:PROGRAMFILES\WindowsPowerShell\DscService\Configuration" 
+                    PullServerThumbPrint = Invoke-Command -ComputerName pull {Get-ChildItem Cert:\LocalMachine\My | Where-Object {($_.EnhancedKeyUsageList -like "Server Authentication*") -and ($_.Issuer -like "CN=blahblahblah root*")}} | Select-Object -expandproperty Thumbprint
+
+
                 }
             )
         }
@@ -44,7 +50,9 @@ param (
         @{ModuleName="xActiveDirectory";ModuleVersion="2.11.0.0"},
         @{ModuleName="xNetworking";ModuleVersion="2.9.0.0"},
         @{ModuleName="XADCSDeployment";ModuleVersion="1.0.0.1"},
-        @{ModuleName="xComputerManagement";ModuleVersion="1.6.0.0"}
+        @{ModuleName="xComputerManagement";ModuleVersion="1.6.0.0"},
+        @{ModuleName="xPSDesiredStateConfiguration";ModuleVersion="3.12.0.0"},
+        @{ModuleName="xWebAdministration";ModuleVersion="1.12.0.0"}
     
     node $AllNodes.NodeName
     {
@@ -310,6 +318,27 @@ param (
             DependsOn = '[Script]setAEGPRegSetting2'
         }
       
+      script setAEGPRegSetting4
+        {
+            Credential = $EACredential
+            TestScript = {
+                            if ((Get-GPRegistryValue -Name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\SystemCertificates\Root\ProtectedRoots" -ValueName "PeerUsages" -ErrorAction SilentlyContinue).value -match "MY") {
+                                return $True
+                                }
+                            else {
+                                return $False
+                                }
+                        }
+            SetScript = {
+                            Set-GPRegistryValue -Name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\SystemCertificates\Root\ProtectedRoots" -ValueName "PeerUsages" -value "1.3.6.1.5.5.7.3.2", "1.3.6.1.5.5.7.3.4", "1.3.6.1.4.1.311.10.3.4" -Type String
+                        }
+            GetScript = {
+                            $RegVal3 = (Get-GPRegistryValue -Name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\SystemCertiticates\Root\ProtectedRoots" -ValueName "PeerUsages")
+                            return @{Result = $RegVal3}
+                        }
+            DependsOn = '[Script]setAEGPRegSetting3'
+        }
+
         Script SetAEGPLink
         {
             Credential = $EACredential
@@ -330,7 +359,7 @@ param (
                             $GPLink = set-GPLink -name "PKI AutoEnroll" -target $Using:Node.DomainDN
                             return @{Result = $GPLink}
                         }
-            DependsOn = '[Script]setAEGPRegSetting3'
+            DependsOn = '[Script]setAEGPRegSetting4'
         }                           
 
 #end region - Add GPO for PKI AutoEnroll
@@ -517,7 +546,7 @@ param (
          }
     }
 
-    node $AllNodes.Where{$_.Role -eq "PullServer"}.NodeName {
+    node $AllNodes.Where{$_.Role -eq "Web"}.NodeName {
 
         xDNSServerAddress SetDNSServer
         {
@@ -526,33 +555,188 @@ param (
             AddressFamily = 'IPv4'
         }
         
-        xWaitForADDomain WaitforAD
-        {
-            DomainName = $Node.Domain
-            RetryIntervalSec = 60
-            RetryCount = 30
-        } 
-
-        xComputer JoinPullToDomain
-        {
-            Name = $Node.NodeName
-            DomainName = $Node.Domain
-            DependsOn = '[xWaitForADDomain]WaitforAD'
-            JoinOU = $Node.ServersOU
-            Credential = $EACredential
-        }
-
         WindowsFeature RSATADPowershell
         {
             Name = 'RSAT-AD-Powershell'
             Ensure = 'Present'
         }
 
-        #Placeholder - WaitForAny on the WebServerGroup Resource
-        #Placeholder - Another WebServerGroup Resource that adds the pull servers to the Members (when crypto template is in place)
+#region install web portion of pull server
+#Stolen shamelessly from Jason's Powershell summit session
+
+        WindowsFeature IIS { 
+            Ensure = "Present" 
+            Name = "Web-Server" 
+            }  
+ 
+# Make sure the following defaults cannot be removed:     
+
+        WindowsFeature DefaultDoc { 
+
+           Ensure = "Present" 
+           Name = "Web-Default-Doc" 
+           DependsOn = '[WindowsFeature]IIS' 
+           }  
+ 
+        WindowsFeature HTTPErrors { 
+          
+           Ensure = "Present" 
+           Name = "Web-HTTP-Errors" 
+           DependsOn = '[WindowsFeature]IIS' 
+           } 
+ 
+        WindowsFeature HTTPLogging { 
+          
+           Ensure = "Present" 
+           Name = "Web-HTTP-Logging" 
+           DependsOn = '[WindowsFeature]IIS' 
+           } 
+ 
+        WindowsFeature StaticContent { 
+            Ensure = "Present" 
+            Name = "Web-Static-Content" 
+            DependsOn = '[WindowsFeature]IIS' 
+            } 
+ 
+        WindowsFeature RequestFiltering { 
+          
+            Ensure = "Present" 
+            Name = "Web-Filtering" 
+            DependsOn = '[WindowsFeature]IIS' 
+            } 
+       
+# Install additional IIS components to support the Web Application  
+ 
+        WindowsFeature NetExtens4 { 
+            Ensure = "Present" 
+            Name = "Web-Net-Ext45" 
+            DependsOn = '[WindowsFeature]IIS' 
+            } 
+ 
+        WindowsFeature AspNet45 { 
+            Ensure = "Present" 
+            Name = "Web-Asp-Net45" 
+            DependsOn = '[WindowsFeature]IIS' 
+            } 
+ 
+        WindowsFeature ISAPIExt { 
+            Ensure = "Present" 
+            Name = "Web-ISAPI-Ext" 
+            DependsOn = '[WindowsFeature]IIS' 
+            } 
+ 
+        WindowsFeature ISAPIFilter { 
+            Ensure = "Present" 
+            Name = "Web-ISAPI-filter" 
+            DependsOn = '[WindowsFeature]IIS' 
+            } 
+  
+# I don't want these defaults for Web-Server to ever be enabled: 
+  
+        WindowsFeature DirectoryBrowsing { 
+            Ensure = "Absent" 
+            Name = "Web-Dir-Browsing" 
+            DependsOn = '[WindowsFeature]IIS' 
+            } 
+  
+        WindowsFeature StaticCompression { 
+            Ensure = "Absent" 
+            Name = "Web-Stat-Compression" 
+            DependsOn = '[WindowsFeature]IIS' 
+            }         
+ 
+# I don't want these Additional settings for Web-Server to ever be enabled: 
+# This list is shortened for demo purposes. I include eveything that should not be installed 
+ 
+        WindowsFeature ASP { 
+            Ensure = "Absent" 
+            Name = "Web-ASP" 
+            DependsOn = '[WindowsFeature]IIS' 
+            } 
+ 
+        WindowsFeature CGI { 
+            Ensure = "Absent" 
+            Name = "Web-CGI" 
+            DependsOn = '[WindowsFeature]IIS' 
+            } 
+
+ 
+        WindowsFeature IPDomainRestrictions { 
+            Ensure = "Absent" 
+            Name = "Web-IP-Security" 
+            DependsOn = '[WindowsFeature]IIS' 
+            } 
+
+ 
+# !!!!! # GUI Remote Management of IIS requires the following: - people always forget this until too late 
+ 
+        WindowsFeature Management { 
+            Name = 'Web-Mgmt-Service' 
+            Ensure = 'Present' 
+            } 
+ 
+        Registry RemoteManagement { # Can set other custom settings inside this reg key 
+            Key = 'HKLM:\SOFTWARE\Microsoft\WebManagement\Server' 
+            ValueName = 'EnableRemoteManagement' 
+            ValueType = 'Dword' 
+            ValueData = '1' 
+            DependsOn = @('[WindowsFeature]IIS','[WindowsFeature]Management') 
+            } 
+ 
+        Service StartWMSVC { 
+            Name = 'WMSVC' 
+            StartupType = 'Automatic' 
+            State = 'Running' 
+            DependsOn = '[Registry]RemoteManagement'  
+            }
+
+# Often, It's common to disable the default website and then create your own 
+# - dont do this to Pull Servers, ADCS or other Services that use the default website 
+ 
+        xWebsite DefaultSite { 
+            Name = "Default Web Site" 
+            State           = "Started" 
+            PhysicalPath    = "C:\inetpub\wwwroot" 
+            DependsOn       = "[WindowsFeature]IIS" 
+            }
+                        
+    } #Node Webserver
 
 
+ #End Node Role Web 
+
+     Node $AllNodes.where{$_.Role -eq 'PullServer'}.NodeName {  
+ 
+# This installs both, WebServer and the DSC Service for a pull server 
+# You could do everything manually - which I prefer 
+ 
+         WindowsFeature DSCServiceFeature { 
+             Ensure = "Present" 
+             Name   = "DSC-Service" 
+             } 
+ 
+         xDscWebService PSDSCPullServer { 
+            Ensure = "Present" 
+            EndpointName = $Node.PullServerEndPointName 
+            Port = $Node.PullServerPort   
+            PhysicalPath = $Node.PullserverPhysicalPath 
+            CertificateThumbPrint =  $Node.PullServerThumbprint
+            ModulePath = $Node.PullServerModulePath 
+            ConfigurationPath = $Node.PullserverConfigurationPath 
+            State = "Started" 
+            DependsOn = "[WindowsFeature]DSCServiceFeature" 
+            }             
+
+        File RegistrationKey
+        {
+            Ensure = "Present"
+            DestinationPath = "$env:PROGRAMFILES\WindowsPowerShell\DscService\RegistrationKeys.txt"
+            Contents  = "b9b36d42-84c0-42ae-b028-779a49bd9f22"
+            Type = "File"
+        }
+        
      }   
+
 }
 
 LabInfraBuild -configurationData $ConfigData -outputpath "C:\DSC\Config" -EACredential (get-credential -username "blah.com\administrator" -Message "EA for ADCS/checking domain presence") -SafeModeAdminPW (get-credential -Username 'Password Only' -Message "Safe Mode Admin PW")

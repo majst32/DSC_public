@@ -1,18 +1,8 @@
-﻿#push DC server config
-cd 'C:\Powershell\DSC_public\Lab buildout\Pull'
+﻿Set-DscLocalConfigurationManager -ComputerName Pull -Path "C:\DSC\LCM" -Verbose -Force
 
-enter-pssession Pull
-#open set-servercommunication and run it
-Exit-PSSession
-
-.\set-DomainObjects 
-
-Set-DscLocalConfigurationManager -ComputerName Pull -Path "C:\DSC\LCM" -Verbose -Force
-
-copy-item "C:\Program Files\WindowsPowerShell\Modules\xActiveDirectory" -Destination "\\Pull\C$\Program Files\WindowsPowershell\Modules\xActiveDirectory" -Recurse -Force
-copy-item "C:\Program Files\WindowsPowershell\Modules\xADCSDeployment" -Destination "\\Pull\C$\Program Files\WindowsPowershell\Modules" -Recurse -force
 copy-item "C:\Program Files\WindowsPowershell\Modules\xNetworking" -Destination "\\Pull\C$\Program Files\WindowsPowershell\Modules" -Recurse -Force
-Copy-Item "C:\Program Files\WindowsPowershell\Modules\xComputerManagement" -Destination "\\Pull\C$\Program Files\WindowsPowershell\Modules" -Recurse -Force
+copy-item "C:\Program Files\WindowsPowershell\Modules\xPSDesiredStateConfiguration" -Destination "\\Pull\C$\Program Files\WindowsPowershell\Modules" -Recurse -Force
+Copy-Item "C:\Program Files\WindowsPowershell\Modules\xWebAdministration" -Destination "\\Pull\C$\Program Files\WindowsPowershell\Modules" -Recurse -Force
 
 Remove-DscConfigurationDocument -CimSession Pull -Stage Current
 Remove-DscConfigurationDocument -CimSession Pull -Stage Pending 
