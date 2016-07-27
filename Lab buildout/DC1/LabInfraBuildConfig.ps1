@@ -21,7 +21,7 @@
                 },
                 @{
                     NodeName = "Pull"
-                    Role = @('PullServer','Web')
+                    Role = 'PullServer'
                     DNSServerIP = '192.168.2.11'
                     sAMAccountName = "Pull$"
                     PullServerEndPointName = 'PSDSCPullServer' 
@@ -30,8 +30,6 @@
                     PullserverModulePath = "$env:PROGRAMFILES\WindowsPowerShell\DscService\Modules" 
                     PullServerConfigurationPath = "$env:PROGRAMFILES\WindowsPowerShell\DscService\Configuration" 
                     PullServerThumbPrint = Invoke-Command -ComputerName pull {Get-ChildItem Cert:\LocalMachine\My | Where-Object {($_.EnhancedKeyUsageList -like "Server Authentication*") -and ($_.Issuer -like "CN=blahblahblah root*")}} | Select-Object -expandproperty Thumbprint
-
-
                 }
             )
         }
@@ -54,55 +52,54 @@ param (
         @{ModuleName="xPSDesiredStateConfiguration";ModuleVersion="3.12.0.0"},
         @{ModuleName="xWebAdministration";ModuleVersion="1.12.0.0"}
     
-    node $AllNodes.NodeName
-    {
+    node $AllNodes.NodeName {
        
-#region - firewall rules
-
-        xFirewall vmpingFWRule
-        {
-            Name = 'vm-monitoring-icmpv4'
-            Action = 'Allow'
-            Direction = 'Inbound'
-            Enabled = $True
-            Ensure = 'Present'
-        }
-        
-        xFirewall SMB
-        {
-            Name = 'FPS-SMB-In-TCP'
-            Action = 'Allow'
-            Direction = 'Inbound'
-            Enabled = $True
-            Ensure = 'Present'
-        }
-
-        xFirewall RemoteEvtLogFWRule1
-        {
-            Name = "RemoteEventLogSvc-In-TCP"
-            Action = "Allow"
-            Direction = 'Inbound'
-            Enabled = $True
-            Ensure = 'Present'
-        }
-
-        xFirewall RemoteEvtLogFWRule2
-        {
-            Name = "RemoteEventLogSvc-NP-In-TCP"
-            Action = "Allow"
-            Direction = 'Inbound'
-            Enabled = $True
-            Ensure = 'Present'
-        }
-
-        xFirewall RemoteEvtLogFWRule3
-        {
-            Name = "RemoteEventLogSvc-RPCSS-In-TCP"
-            Action = "Allow"
-            Direction = 'Inbound'
-            Enabled = $True
-            Ensure = 'Present'
-        }
+#region - firewall rules 
+ 
+         xFirewall vmpingFWRule 
+         { 
+             Name = 'vm-monitoring-icmpv4' 
+             Action = 'Allow' 
+             Direction = 'Inbound' 
+             Enabled = $True 
+             Ensure = 'Present' 
+         } 
+          
+        xFirewall SMB 
+         { 
+             Name = 'FPS-SMB-In-TCP' 
+             Action = 'Allow' 
+             Direction = 'Inbound' 
+             Enabled = $True 
+             Ensure = 'Present' 
+         } 
+ 
+         xFirewall RemoteEvtLogFWRule1 
+         { 
+             Name = "RemoteEventLogSvc-In-TCP" 
+             Action = "Allow" 
+             Direction = 'Inbound' 
+             Enabled = $True 
+             Ensure = 'Present' 
+         } 
+ 
+         xFirewall RemoteEvtLogFWRule2 
+         { 
+             Name = "RemoteEventLogSvc-NP-In-TCP" 
+             Action = "Allow" 
+             Direction = 'Inbound' 
+             Enabled = $True 
+             Ensure = 'Present' 
+         } 
+ 
+         xFirewall RemoteEvtLogFWRule3 
+         { 
+             Name = "RemoteEventLogSvc-RPCSS-In-TCP" 
+             Action = "Allow" 
+             Direction = 'Inbound' 
+             Enabled = $True 
+             Ensure = 'Present' 
+         } 
 
  #end region - firewall rules   
 
@@ -110,7 +107,6 @@ param (
 
         Script DSCAnalyticLog
         {
-            DependsOn = '[xFirewall]RemoteEvtLogFWRule3'
             TestScript = {
                             $status = wevtutil get-log “Microsoft-Windows-Dsc/Analytic”
                             if ($status -contains "enabled: true") {return $True} else {return $False}
@@ -129,11 +125,11 @@ param (
             Ensure = "Absent"
             Name = "User-Interfaces-Infra"
             IncludeAllSubFeature = $false
-            DependsOn = '[xFirewall]vmpingFWRule','[xFirewall]SMB','[xFirewall]RemoteEvtLogFWRule1','[xFirewall]RemoteEvtLogFWRule2','[xFirewall]RemoteEvtLogFWRule3'
+            DependsOn = '[xFirewall]vmpingFWRule','[xFirewall]SMB','[xFirewall]RemoteEvtLogFWRule1','[xFirewall]RemoteEvtLogFWRule2','[xFirewall]RemoteEvtLogFWRule3','[Script]DSCAnalyticLog'
         } 
                                                               
     }
-    
+   
     node $AllNodes.Where{$_.Role -eq "AD_ADCS"}.NodeName {
         
         WindowsFeature ADDS
@@ -322,7 +318,7 @@ param (
         {
             Credential = $EACredential
             TestScript = {
-                            if ((Get-GPRegistryValue -Name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\SystemCertificates\Root\ProtectedRoots" -ValueName "PeerUsages" -ErrorAction SilentlyContinue).value -match "MY") {
+                            if ((Get-GPRegistryValue -Name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\SystemCertificates\Root\ProtectedRoots" -ValueName "PeerUsages" -errorAction SilentlyContinue).value -match "1.3.6.1.5.5.7.3.2 1.3.6.1.5.5.7.3.4 1.3.6.1.4.1.311.10.3.4") {
                                 return $True
                                 }
                             else {
@@ -363,7 +359,7 @@ param (
         }                           
 
 #end region - Add GPO for PKI AutoEnroll
- 
+
 #region - ADCS
                             
         WindowsFeature ADCS
@@ -546,7 +542,7 @@ param (
          }
     }
 
-    node $AllNodes.Where{$_.Role -eq "Web"}.NodeName {
+    node $AllNodes.where{$_.Role -eq 'PullServer'}.NodeName {  
 
         xDNSServerAddress SetDNSServer
         {
@@ -554,167 +550,72 @@ param (
             InterfaceAlias = 'Ethernet'
             AddressFamily = 'IPv4'
         }
-        
-        WindowsFeature RSATADPowershell
-        {
-            Name = 'RSAT-AD-Powershell'
-            Ensure = 'Present'
-        }
-
-#region install web portion of pull server
-#Stolen shamelessly from Jason's Powershell summit session
-
-        WindowsFeature IIS { 
-            Ensure = "Present" 
-            Name = "Web-Server" 
-            }  
  
-# Make sure the following defaults cannot be removed:     
-
-        WindowsFeature DefaultDoc { 
-
-           Ensure = "Present" 
-           Name = "Web-Default-Doc" 
-           DependsOn = '[WindowsFeature]IIS' 
-           }  
- 
-        WindowsFeature HTTPErrors { 
-          
-           Ensure = "Present" 
-           Name = "Web-HTTP-Errors" 
-           DependsOn = '[WindowsFeature]IIS' 
-           } 
- 
-        WindowsFeature HTTPLogging { 
-          
-           Ensure = "Present" 
-           Name = "Web-HTTP-Logging" 
-           DependsOn = '[WindowsFeature]IIS' 
-           } 
- 
-        WindowsFeature StaticContent { 
-            Ensure = "Present" 
-            Name = "Web-Static-Content" 
-            DependsOn = '[WindowsFeature]IIS' 
-            } 
- 
-        WindowsFeature RequestFiltering { 
-          
-            Ensure = "Present" 
-            Name = "Web-Filtering" 
-            DependsOn = '[WindowsFeature]IIS' 
-            } 
-       
-# Install additional IIS components to support the Web Application  
- 
-        WindowsFeature NetExtens4 { 
-            Ensure = "Present" 
-            Name = "Web-Net-Ext45" 
-            DependsOn = '[WindowsFeature]IIS' 
-            } 
- 
-        WindowsFeature AspNet45 { 
-            Ensure = "Present" 
-            Name = "Web-Asp-Net45" 
-            DependsOn = '[WindowsFeature]IIS' 
-            } 
- 
-        WindowsFeature ISAPIExt { 
-            Ensure = "Present" 
-            Name = "Web-ISAPI-Ext" 
-            DependsOn = '[WindowsFeature]IIS' 
-            } 
- 
-        WindowsFeature ISAPIFilter { 
-            Ensure = "Present" 
-            Name = "Web-ISAPI-filter" 
-            DependsOn = '[WindowsFeature]IIS' 
-            } 
-  
-# I don't want these defaults for Web-Server to ever be enabled: 
-  
-        WindowsFeature DirectoryBrowsing { 
-            Ensure = "Absent" 
-            Name = "Web-Dir-Browsing" 
-            DependsOn = '[WindowsFeature]IIS' 
-            } 
-  
-        WindowsFeature StaticCompression { 
-            Ensure = "Absent" 
-            Name = "Web-Stat-Compression" 
-            DependsOn = '[WindowsFeature]IIS' 
-            }         
- 
-# I don't want these Additional settings for Web-Server to ever be enabled: 
-# This list is shortened for demo purposes. I include eveything that should not be installed 
+        WindowsFeature DSCServiceFeature { 
+             Ensure = "Present" 
+             Name   = "DSC-Service" 
+             } 
  
         WindowsFeature ASP { 
-            Ensure = "Absent" 
-            Name = "Web-ASP" 
-            DependsOn = '[WindowsFeature]IIS' 
-            } 
+          
+             Ensure = "Absent" 
+             Name = "Web-ASP" 
+             DependsOn = '[WindowsFeature]DSCServiceFeature' 
+         } 
+
  
         WindowsFeature CGI { 
-            Ensure = "Absent" 
-            Name = "Web-CGI" 
-            DependsOn = '[WindowsFeature]IIS' 
-            } 
-
+          
+             Ensure = "Absent" 
+             Name = "Web-CGI" 
+             DependsOn = '[WindowsFeature]DSCServiceFeature' 
+         } 
+ 
  
         WindowsFeature IPDomainRestrictions { 
-            Ensure = "Absent" 
-            Name = "Web-IP-Security" 
-            DependsOn = '[WindowsFeature]IIS' 
-            } 
-
+          
+             Ensure = "Absent" 
+             Name = "Web-IP-Security" 
+             DependsOn = '[WindowsFeature]DSCServiceFeature' 
+         } 
  
-# !!!!! # GUI Remote Management of IIS requires the following: - people always forget this until too late 
  
-        WindowsFeature Management { 
-            Name = 'Web-Mgmt-Service' 
-            Ensure = 'Present' 
-            } 
+ # !!!!! # GUI Remote Management of IIS requires the following: - people always forget this until too late 
  
-        Registry RemoteManagement { # Can set other custom settings inside this reg key 
-            Key = 'HKLM:\SOFTWARE\Microsoft\WebManagement\Server' 
-            ValueName = 'EnableRemoteManagement' 
-            ValueType = 'Dword' 
-            ValueData = '1' 
-            DependsOn = @('[WindowsFeature]IIS','[WindowsFeature]Management') 
-            } 
+ 
+         WindowsFeature Management { 
+ 
+             Name = 'Web-Mgmt-Service' 
+             Ensure = 'Present' 
+         } 
+ 
+ 
+         Registry RemoteManagement { # Can set other custom settings inside this reg key 
+             Key = 'HKLM:\SOFTWARE\Microsoft\WebManagement\Server' 
+             ValueName = 'EnableRemoteManagement' 
+             ValueType = 'Dword' 
+             ValueData = '1' 
+             DependsOn = @('[WindowsFeature]DSCServiceFeature','[WindowsFeature]Management') 
+        } 
+ 
  
         Service StartWMSVC { 
             Name = 'WMSVC' 
             StartupType = 'Automatic' 
             State = 'Running' 
-            DependsOn = '[Registry]RemoteManagement'  
-            }
-
-# Often, It's common to disable the default website and then create your own 
-# - dont do this to Pull Servers, ADCS or other Services that use the default website 
+            DependsOn = '[Registry]RemoteManagement' 
+        } 
+  
+#       # Often, It's common to disable the default website and then create your own 
+         # - dont do this to Pull Servers, ADCS or other Services that use the default website 
  
         xWebsite DefaultSite { 
-            Name = "Default Web Site" 
+            Name            = "Default Web Site" 
             State           = "Started" 
             PhysicalPath    = "C:\inetpub\wwwroot" 
-            DependsOn       = "[WindowsFeature]IIS" 
-            }
-                        
-    } #Node Webserver
+            DependsOn       = "[WindowsFeature]DSCServiceFeature" 
+        } 
 
-
- #End Node Role Web 
-
-     Node $AllNodes.where{$_.Role -eq 'PullServer'}.NodeName {  
- 
-# This installs both, WebServer and the DSC Service for a pull server 
-# You could do everything manually - which I prefer 
- 
-         WindowsFeature DSCServiceFeature { 
-             Ensure = "Present" 
-             Name   = "DSC-Service" 
-             } 
- 
          xDscWebService PSDSCPullServer { 
             Ensure = "Present" 
             EndpointName = $Node.PullServerEndPointName 
