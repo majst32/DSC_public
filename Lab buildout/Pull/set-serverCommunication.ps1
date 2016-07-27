@@ -22,10 +22,6 @@ Get-NetFirewallRule | Where-Object {$_.Name -match "vm-monitoring-icmpv4"} | Ena
 Get-NetFirewallRule | Where-Object {$_.Name -like "*RemoteEventLogSvc*"} | Enable-NetFirewallRule
 wevtutil.exe set-log “Microsoft-Windows-Dsc/Analytic” /q:true /e:true
 
-#Add RSAT-AD-Powershell
-if ((get-windowsFeature -name RSAT-AD-Powershell).installState -ne "Installed")
-    {Install-WindowsFeature RSAT-AD-Powershell}
-
 #Rename and add to domain
 rename-computer -NewName $NewName
 start-sleep -seconds 5

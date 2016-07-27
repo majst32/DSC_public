@@ -21,7 +21,7 @@
                 },
                 @{
                     NodeName = "Pull"
-                    Role = 'PullServer'
+                    Role = "PullServer"
                     DNSServerIP = '192.168.2.11'
                     sAMAccountName = "Pull$"
                     PullServerEndPointName = 'PSDSCPullServer' 
@@ -542,7 +542,7 @@ param (
          }
     }
 
-    node $AllNodes.where{$_.Role -eq 'PullServer'}.NodeName {  
+    node $AllNodes.where{$_.Role -eq "PullServer"}.NodeName {  
 
         xDNSServerAddress SetDNSServer
         {
