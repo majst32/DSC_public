@@ -50,7 +50,8 @@ param (
         @{ModuleName="XADCSDeployment";ModuleVersion="1.0.0.1"},
         @{ModuleName="xComputerManagement";ModuleVersion="1.6.0.0"},
         @{ModuleName="xPSDesiredStateConfiguration";ModuleVersion="3.12.0.0"},
-        @{ModuleName="xWebAdministration";ModuleVersion="1.12.0.0"}
+        @{ModuleName="xWebAdministration";ModuleVersion="1.12.0.0"},
+        @{ModuleName="xDHCPServer";ModuleVersion="1.4.0.0"}
     
     node $AllNodes.NodeName {
        
@@ -131,6 +132,44 @@ param (
     }
    
     node $AllNodes.Where{$_.Role -eq "AD_ADCS"}.NodeName {
+        
+ #Region DHCPServer
+
+    WindowsFeature DHCPServer {
+        Name = 'DHCP'
+        Ensure = 'Present'
+        }
+        
+    WindowsFeature DHCPRSAT {
+        Name = 'RSAT-DHCP'
+        Ensure = 'Present'
+        DependsOn = '[WindowsFeature]DHCPServer'
+        }
+        
+    xDHCPServerScope Scope1 {
+        DependsOn = '[WindowsFeature]DHCPServer'
+        Ensure = 'Present'
+        IPStartRange = '192.168.2.12'
+        IPEndRange = '192.168.2.254'
+        SubnetMask = '255.255.255.0'
+        State = 'Active'
+        Name = "VLAN1"
+        }
+        
+     xDHCPServerOption DHCPDefaults {
+        DependsOn = '[xDhcpServerScope]Scope1'
+        ScopeID = '192.168.2.0'
+        DnsServerIPAddress = '192.168.2.11'
+        DnsDomain = $Node.Domain
+        Router = '192.168.2.1'
+        AddressFamily = 'IPV4'
+        Ensure = 'Present'
+        } 
+       
+        
+#end region DHCP Server
+
+#region ADDS        
         
         WindowsFeature ADDS
         {
@@ -228,6 +267,7 @@ param (
             Path = "OU=Groups,$($Node.DomainDN)"
             Ensure = 'Present'
         }
+#end region ADDS
 
 #region - Add GPO for PKI AutoEnroll
         script CreatePKIAEGpo
@@ -453,6 +493,8 @@ param (
 
 #end region - ADCS
 
+#region WebServer Cert setup
+
 #would like to collapse next two into one resource with a foreach loop on the GUIDs, but can't get it working.
 
         script SetWebServerTemplateAutoenroll
@@ -540,6 +582,17 @@ param (
                     }
                 }
          }
+
+#End Region WebServer Cert setup
+
+
+        
+    xDHCPServerAuthorization DHCPAuth {
+        DependsOn = '[xADDomain]FirstDC'
+        Ensure = 'Present'
+        } 
+        
+      
     }
 
     node $AllNodes.where{$_.Role -eq "PullServer"}.NodeName {  
