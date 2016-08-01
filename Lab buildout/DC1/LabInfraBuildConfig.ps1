@@ -140,12 +140,6 @@ param (
         Ensure = 'Present'
         }
         
-    WindowsFeature DHCPRSAT {
-        Name = 'RSAT-DHCP'
-        Ensure = 'Present'
-        DependsOn = '[WindowsFeature]DHCPServer'
-        }
-        
     xDHCPServerScope Scope1 {
         DependsOn = '[WindowsFeature]DHCPServer'
         Ensure = 'Present'
