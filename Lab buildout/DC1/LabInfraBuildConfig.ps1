@@ -18,23 +18,12 @@
                     CADNSuffix = "C=US,L=Somecity,S=Pennsylvania,O=Test Corp"
                     CADatabasePath = "C:\windows\system32\CertLog"
                     CALogPath = "C:\CA_Logs"
-                },
-                @{
-                    NodeName = "Pull"
-                    Role = "PullServer"
-                    DNSServerIP = '192.168.2.11'
-                    sAMAccountName = "Pull$"
-                    PullServerEndPointName = 'PSDSCPullServer' 
-                    PullserverPort = 8080                       
-                    PullserverPhysicalPath = "$env:SystemDrive\inetpub\wwwroot\PSDSCPullServer" 
-                    PullserverModulePath = "$env:PROGRAMFILES\WindowsPowerShell\DscService\Modules" 
-                    PullServerConfigurationPath = "$env:PROGRAMFILES\WindowsPowerShell\DscService\Configuration" 
-                    PullServerThumbPrint = Invoke-Command -ComputerName pull {Get-ChildItem Cert:\LocalMachine\My | Where-Object {($_.EnhancedKeyUsageList -like "Server Authentication*") -and ($_.Issuer -like "CN=blahblahblah root*")}} | Select-Object -expandproperty Thumbprint
                 }
+                
             )
         }
 
-Configuration LabInfraBuild {
+Configuration DC1Config {
 
 param (
     [parameter(Mandatory=$True)]
@@ -44,91 +33,16 @@ param (
     [pscredential]$SafeModeAdminPW
     )
 
-    import-DSCresource -ModuleName PSDesiredStateConfiguration,
+    import-DSCresource -ModuleName PSDesiredStateConfiguration,CompositeBase,
         @{ModuleName="xActiveDirectory";ModuleVersion="2.11.0.0"},
         @{ModuleName="xNetworking";ModuleVersion="2.9.0.0"},
         @{ModuleName="XADCSDeployment";ModuleVersion="1.0.0.1"},
-        @{ModuleName="xComputerManagement";ModuleVersion="1.6.0.0"},
-        @{ModuleName="xPSDesiredStateConfiguration";ModuleVersion="3.12.0.0"},
-        @{ModuleName="xWebAdministration";ModuleVersion="1.12.0.0"},
         @{ModuleName="xDHCPServer";ModuleVersion="1.4.0.0"}
     
     node $AllNodes.NodeName {
-       
-#region - firewall rules 
- 
-         xFirewall vmpingFWRule 
-         { 
-             Name = 'vm-monitoring-icmpv4' 
-             Action = 'Allow' 
-             Direction = 'Inbound' 
-             Enabled = $True 
-             Ensure = 'Present' 
-         } 
-          
-        xFirewall SMB 
-         { 
-             Name = 'FPS-SMB-In-TCP' 
-             Action = 'Allow' 
-             Direction = 'Inbound' 
-             Enabled = $True 
-             Ensure = 'Present' 
-         } 
- 
-         xFirewall RemoteEvtLogFWRule1 
-         { 
-             Name = "RemoteEventLogSvc-In-TCP" 
-             Action = "Allow" 
-             Direction = 'Inbound' 
-             Enabled = $True 
-             Ensure = 'Present' 
-         } 
- 
-         xFirewall RemoteEvtLogFWRule2 
-         { 
-             Name = "RemoteEventLogSvc-NP-In-TCP" 
-             Action = "Allow" 
-             Direction = 'Inbound' 
-             Enabled = $True 
-             Ensure = 'Present' 
-         } 
- 
-         xFirewall RemoteEvtLogFWRule3 
-         { 
-             Name = "RemoteEventLogSvc-RPCSS-In-TCP" 
-             Action = "Allow" 
-             Direction = 'Inbound' 
-             Enabled = $True 
-             Ensure = 'Present' 
-         } 
+    
+    BaseConfig Base {}
 
- #end region - firewall rules   
-
- #enable DSC Analytic Log for troubleshooting
-
-        Script DSCAnalyticLog
-        {
-            TestScript = {
-                            $status = wevtutil get-log “Microsoft-Windows-Dsc/Analytic”
-                            if ($status -contains "enabled: true") {return $True} else {return $False}
-                        }
-            SetScript = {
-                            wevtutil.exe set-log “Microsoft-Windows-Dsc/Analytic” /q:true /e:true
-                        }
-            getScript = {
-                            $Result = wevtutil get-log “Microsoft-Windows-Dsc/Analytic”
-                            return @{Result = $Result}
-                        }
-        }
-
-        WindowsFeature ServerCore
-        {
-            Ensure = "Absent"
-            Name = "User-Interfaces-Infra"
-            IncludeAllSubFeature = $false
-            DependsOn = '[xFirewall]vmpingFWRule','[xFirewall]SMB','[xFirewall]RemoteEvtLogFWRule1','[xFirewall]RemoteEvtLogFWRule2','[xFirewall]RemoteEvtLogFWRule3','[Script]DSCAnalyticLog'
-        } 
-                                                              
     }
    
     node $AllNodes.Where{$_.Role -eq "AD_ADCS"}.NodeName {
@@ -169,14 +83,14 @@ param (
         {
            Ensure = "Present"
            Name   = "AD-Domain-Services"
-           DependsOn = '[WindowsFeature]ServerCore'
+           DependsOn = '[BaseConfig]Base'
         }
 
         WindowsFeature GPMC
         {
             Ensure = 'Present'
             Name = 'GPMC'
-            DependsOn = '[WindowsFeature]ServerCore'
+            DependsOn = '[BaseConfig]Base'
         }
  
  #DCPromo
@@ -487,98 +401,59 @@ param (
 
 #end region - ADCS
 
-#region WebServer Cert setup
+#region WebServer Cert permissions - set enroll and autoenroll
 
-#would like to collapse next two into one resource with a foreach loop on the GUIDs, but can't get it working.
+        [string[]]$Perms = "0e10c968-78fb-11d2-90d4-00c04f79dc55","a05b8cc2-17bc-4802-a710-e7c15ab866a2"
 
-        script SetWebServerTemplateAutoenroll
-        {
-            DependsOn = '[Script]CreateWebServer2Template'
-            Credential = $EACredential
-            TestScript = {
-                Import-Module activedirectory
-                $WebServerCertACL = (get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
-                if ($WebServerCertACL -eq $Null) {
-                    write-verbose "Web Servers Group does not have permissions on Web Server template"
-                    Return $False
-                    }
-                elseif (($WebServerCertACL.ActiveDirectoryRights -like "*ExtendedRight*") -and ($WebServerCertACL.ObjectType -notcontains "a05b8cc2-17bc-4802-a710-e7c15ab866a2")) {
-                    write-verbose "Web Servers group has permission, but not the correct permission."
-                    Return $False
-                    }
-                else {
-                    write-verbose "ACL on Web Server Template is set correctly for this GUID for Web Servers Group"
-                    Return $True
-                    }
-                }
-             SetScript = {
-                Import-Module activedirectory
-                $WebServersGroup = get-adgroup -Identity "Web Servers" | Select-Object SID
-                $EnrollGUID = [GUID]::Parse("a05b8cc2-17bc-4802-a710-e7c15ab866a2")
-                $ACL = get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com"
-                $ACL.AddAccessRule((New-Object System.DirectoryServices.ExtendedRightAccessRule $WebServersGroup.SID,'Allow',$EnrollGUID,'None'))
-                #$ACL.AddAccessRule((New-Object System.DirectoryServices.ActiveDirectoryAccessRule $WebServersGroup.SID,'ReadProperty','Allow'))
-                #$ACL.AddAccessRule((New-Object System.DirectoryServices.ActiveDirectoryAccessRule $WebServersGroup.SID,'GenericExecute','Allow'))
-                set-ACL "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" -AclObject $ACL
-                write-verbose "AutoEnroll permissions set for Web Servers Group"
-                }
-             GetScript = {
-                Import-Module activedirectory
-                $WebServerCertACL = (get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
-                if ($WebServerCertACL -ne $Null) {
-                    return $WebServerCertACL
-                    }
-                else {
-                    Return @{}
-                    }
-                }
-         }
-            
-    script SetWebServerTemplateEnroll
-        {
-            DependsOn = '[Script]CreateWebServer2Template'
-            Credential = $EACredential
-            TestScript = {
-                Import-Module activedirectory
-                $WebServerCertACL = (get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
-                if ($WebServerCertACL -eq $Null) {
-                    write-verbose "Web Servers Group does not have permissions on Web Server template"
-                    Return $False
-                    }
-                elseif (($WebServerCertACL.ActiveDirectoryRights -like "*ExtendedRight*") -and ($WebServerCertACL.ObjectType -notcontains "0e10c968-78fb-11d2-90d4-00c04f79dc55")) {
-                    write-verbose "Web Servers group has permission, but not the correct permission."
-                    Return $False
-                    }
-                else {
-                    write-verbose "ACL on Web Server Template is set correctly for this GUID for Web Servers Group"
-                    Return $True
-                    }
-                }
-             SetScript = {
-                Import-Module activedirectory
-                $WebServersGroup = get-adgroup -Identity "Web Servers" | Select-Object SID
-                $EnrollGUID = [GUID]::Parse("0e10c968-78fb-11d2-90d4-00c04f79dc55")
-                $ACL = get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com"
-                $ACL.AddAccessRule((New-Object System.DirectoryServices.ExtendedRightAccessRule $WebServersGroup.SID,'Allow',$EnrollGUID,'None'))
-                #$ACL.AddAccessRule((New-Object System.DirectoryServices.ActiveDirectoryAccessRule $WebServersGroup.SID,'ReadProperty','Allow'))
-                #$ACL.AddAccessRule((New-Object System.DirectoryServices.ActiveDirectoryAccessRule $WebServersGroup.SID,'GenericExecute','Allow'))
-                set-ACL "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" -AclObject $ACL
-                write-verbose "Enroll permissions set for Web Servers Group"
-                }
-             GetScript = {
-                Import-Module activedirectory
-                $WebServerCertACL = (get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
-                if ($WebServerCertACL -ne $Null) {
-                    return $WebServerCertACL
-                    }
-                else {
-                    Return @{}
-                    }
-                }
-         }
+        foreach ($P in $Perms) {
 
-#End Region WebServer Cert setup
+                script $P
+                {
+                    DependsOn = '[Script]CreateWebServer2Template'
+                    Credential = $EACredential
+                    TestScript = {
+                        Import-Module activedirectory
+                        $WebServerCertACL = (get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
+                        if ($WebServerCertACL -eq $Null) {
+                            write-verbose "Web Servers Group does not have permissions on Web Server template"
+                            Return $False
+                            }
+                        elseif (($WebServerCertACL.ActiveDirectoryRights -like "*ExtendedRight*") -and ($WebServerCertACL.ObjectType -notcontains $Using:P)) {
+                            write-verbose "Web Servers group has permission, but not the correct permission."
+                            Return $False
+                            }
+                        else {
+                            write-verbose "ACL on Web Server Template is set correctly for this GUID for Web Servers Group"
+                            Return $True
+                            }
+                        }
+                     SetScript = {
+                        Import-Module activedirectory
+                        $WebServersGroup = get-adgroup -Identity "Web Servers" | Select-Object SID
+                        $EnrollGUID = [GUID]::Parse($Using:P)
+                        $ACL = get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com"
+                        $ACL.AddAccessRule((New-Object System.DirectoryServices.ExtendedRightAccessRule $WebServersGroup.SID,'Allow',$EnrollGUID,'None'))
+                        #$ACL.AddAccessRule((New-Object System.DirectoryServices.ActiveDirectoryAccessRule $WebServersGroup.SID,'ReadProperty','Allow'))
+                        #$ACL.AddAccessRule((New-Object System.DirectoryServices.ActiveDirectoryAccessRule $WebServersGroup.SID,'GenericExecute','Allow'))
+                        set-ACL "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" -AclObject $ACL
+                        write-verbose "AutoEnroll permissions set for Web Servers Group"
+                        }
+                     GetScript = {
+                        Import-Module activedirectory
+                        $WebServerCertACL = (get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
+                        if ($WebServerCertACL -ne $Null) {
+                            return $WebServerCertACL
+                            }
+                        else {
+                            Return @{}
+                            }
+                        }
+                 }
+                 
+        }   
+    
 
+#region WebServer Cert permissions - set enroll and autoenroll
 
         
     xDHCPServerAuthorization DHCPAuth {
@@ -587,104 +462,8 @@ param (
         } 
         
       
-    }
-
-    node $AllNodes.where{$_.Role -eq "PullServer"}.NodeName {  
-
-        xDNSServerAddress SetDNSServer
-        {
-            Address = $Node.DNSServerIP
-            InterfaceAlias = 'Ethernet'
-            AddressFamily = 'IPv4'
-        }
- 
-        WindowsFeature DSCServiceFeature { 
-             Ensure = "Present" 
-             Name   = "DSC-Service" 
-             } 
- 
-        WindowsFeature ASP { 
-          
-             Ensure = "Absent" 
-             Name = "Web-ASP" 
-             DependsOn = '[WindowsFeature]DSCServiceFeature' 
-         } 
-
- 
-        WindowsFeature CGI { 
-          
-             Ensure = "Absent" 
-             Name = "Web-CGI" 
-             DependsOn = '[WindowsFeature]DSCServiceFeature' 
-         } 
- 
- 
-        WindowsFeature IPDomainRestrictions { 
-          
-             Ensure = "Absent" 
-             Name = "Web-IP-Security" 
-             DependsOn = '[WindowsFeature]DSCServiceFeature' 
-         } 
- 
- 
- # !!!!! # GUI Remote Management of IIS requires the following: - people always forget this until too late 
- 
- 
-         WindowsFeature Management { 
- 
-             Name = 'Web-Mgmt-Service' 
-             Ensure = 'Present' 
-         } 
- 
- 
-         Registry RemoteManagement { # Can set other custom settings inside this reg key 
-             Key = 'HKLM:\SOFTWARE\Microsoft\WebManagement\Server' 
-             ValueName = 'EnableRemoteManagement' 
-             ValueType = 'Dword' 
-             ValueData = '1' 
-             DependsOn = @('[WindowsFeature]DSCServiceFeature','[WindowsFeature]Management') 
-        } 
- 
- 
-        Service StartWMSVC { 
-            Name = 'WMSVC' 
-            StartupType = 'Automatic' 
-            State = 'Running' 
-            DependsOn = '[Registry]RemoteManagement' 
-        } 
-  
-#       # Often, It's common to disable the default website and then create your own 
-         # - dont do this to Pull Servers, ADCS or other Services that use the default website 
- 
-        xWebsite DefaultSite { 
-            Name            = "Default Web Site" 
-            State           = "Started" 
-            PhysicalPath    = "C:\inetpub\wwwroot" 
-            DependsOn       = "[WindowsFeature]DSCServiceFeature" 
-        } 
-
-         xDscWebService PSDSCPullServer { 
-            Ensure = "Present" 
-            EndpointName = $Node.PullServerEndPointName 
-            Port = $Node.PullServerPort   
-            PhysicalPath = $Node.PullserverPhysicalPath 
-            CertificateThumbPrint =  $Node.PullServerThumbprint
-            ModulePath = $Node.PullServerModulePath 
-            ConfigurationPath = $Node.PullserverConfigurationPath 
-            State = "Started" 
-            DependsOn = "[WindowsFeature]DSCServiceFeature" 
-            }             
-
-        File RegistrationKey
-        {
-            Ensure = "Present"
-            DestinationPath = "$env:PROGRAMFILES\WindowsPowerShell\DscService\RegistrationKeys.txt"
-            Contents  = "b9b36d42-84c0-42ae-b028-779a49bd9f22"
-            Type = "File"
-        }
-        
-     }   
+    } 
 
 }
 
-LabInfraBuild -configurationData $ConfigData -outputpath "C:\DSC\Config" -EACredential (get-credential -username "blah.com\administrator" -Message "EA for ADCS/checking domain presence") -SafeModeAdminPW (get-credential -Username 'Password Only' -Message "Safe Mode Admin PW")
+DC1Config -configurationData $ConfigData -outputpath "C:\DSC\Config" -EACredential (get-credential -username "blah.com\administrator" -Message "EA for ADCS/checking domain presence") -SafeModeAdminPW (get-credential -Username 'Password Only' -Message "Safe Mode Admin PW")
