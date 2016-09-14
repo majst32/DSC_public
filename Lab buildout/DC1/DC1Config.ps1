@@ -333,6 +333,8 @@ param (
             DependsOn = '[WindowsFeature]ADCS','[xADDomain]FirstDC'    
         }
 
+#region Template setup
+
 #Note:  The Test section is pure laziness.  Future enhancement:  test for more than just existence.
         script CreateWebServer2Template
         {
@@ -380,7 +382,57 @@ param (
                                     }
                             }
         }
-         
+ 
+ #Note:  The Test section is pure laziness.  Future enhancement:  test for more than just existence.
+        script CreateDSCTemplate
+        {
+            DependsOn = '[xAdcsCertificationAuthority]ADCSConfig'
+            Credential = $EACredential
+            TestScript = {
+                            try {
+                                $DSCTemplate=get-ADObject -Identity "CN=DSCTemplate,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" -Properties * -ErrorAction Stop
+                                return $True
+                                }
+                            catch {
+                                return $False
+                                }
+                         }
+            SetScript = {
+                         $DSCTemplateProps = @{'flags'='131680';
+                        'msPKI-Cert-Template-OID'='1.3.6.1.4.1.311.21.8.16187918.14945684.15749023.11519519.4925321.197.13392998.8282280';
+                        'msPKI-Certificate-Application-Policy'='1.3.6.1.4.1.311.80.1';
+                        'msPKI-Certificate-Name-Flag'='1207959552';
+                        #'msPKI-Enrollment-Flag'='34';
+                        'msPKI-Enrollment-Flag'='32';
+                        'msPKI-Minimal-Key-Size'='2048';
+                        'msPKI-Private-Key-Flag'='0';
+                        'msPKI-RA-Signature'='0';
+                        #'msPKI-Supersede-Templates'='WebServer';
+                        'msPKI-Template-Minor-Revision'='3';
+                        'msPKI-Template-Schema-Version'='2';
+                        'pKICriticalExtensions'='2.5.29.15';
+                        'pKIDefaultCSPs'='1,Microsoft RSA SChannel Cryptographic Provider';
+                        'pKIDefaultKeySpec'='1';
+                        'pKIExtendedKeyUsage'='1.3.6.1.4.1.311.80.1';
+                        'pKIMaxIssuingDepth'='0';
+                        'revision'='100'}
+
+
+                        New-ADObject -name "DSCTemplate" -Type pKICertificateTemplate -Path "CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" -DisplayName DSCTemplate -OtherAttributes $DSCTemplateProps
+                        $WSOrig = Get-ADObject -Identity "CN=Workstation,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" -Properties * | Select-Object pkiExpirationPeriod,pkiOverlapPeriod,pkiKeyUsage
+                        [byte[]] $WSOrig.pkiKeyUsage = 48
+                        Get-ADObject -Identity "CN=DSCTemplate,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" | Set-ADObject -Add @{'pKIKeyUsage'=$WSOrig.pKIKeyUsage;'pKIExpirationPeriod'=$WSOrig.pKIExpirationPeriod;'pkiOverlapPeriod'=$WSOrig.pKIOverlapPeriod}
+                        }
+                GetScript = {
+                                try {
+                                    return {get-ADObject -Identity "CN=DSCTemplate,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" -Properties * -ErrorAction Stop}
+                                    }
+                                catch {
+                                    return @{Result=$Null}
+                                    }
+                            }
+        }
+              
         script PublishWebServerTemplate2 
         {       
            DependsOn = '[Script]CreateWebServer2Template'
@@ -397,8 +449,25 @@ param (
                             return {Get-CATemplate | Where-Object {$_.Name -match "WebServer2"}}
                         }
          }
-                                                     
-
+          
+          script PublishDSCTemplate 
+        {       
+           DependsOn = '[Script]CreateDSCTemplate'
+           Credential = $EACredential
+           TestScript = {
+                            $Template= Get-CATemplate | Where-Object {$_.Name -match "DSCTemplate"}
+                            if ($Template -eq $Null) {return $False}
+                            else {return $True}
+                        }
+           SetScript = {
+                            add-CATemplate -name "DSCTemplate" -force
+                        }
+           GetScript = {
+                            return {Get-CATemplate | Where-Object {$_.Name -match "DSCTemplate"}}
+                        }
+         } 
+                                                   
+    #end region - Template Setup
 #end region - ADCS
 
 #region WebServer Cert setup
