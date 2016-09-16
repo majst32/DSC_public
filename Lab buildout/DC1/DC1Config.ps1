@@ -30,7 +30,9 @@ param (
     [pscredential]$EACredential,
 
     [parameter(Mandatory=$True)]
-    [pscredential]$SafeModeAdminPW
+    [pscredential]$SafeModeAdminPW,
+
+    [string[]] $pullserver
     )
 
     import-DSCresource -ModuleName PSDesiredStateConfiguration,CompositeBase,
@@ -132,16 +134,15 @@ param (
 
 #Pre-add member servers to AD
 
-        $MbrSvrs = $AllNodes.Where{$_.NodeName -notmatch "DC1"}
-        foreach ($M in $MbrSvrs)
+        foreach ($M in $Pullserver)
             {
             
-            script "AddMbrSvr_$($M.NodeName)" {
+            script "AddMbrSvr_$($M)" {
                 Credential = $EACredential
                 DependsOn = '[xADOrganizationalUnit]ServersOU'
                 TestScript = {
                                 try {
-                                    Get-ADComputer -Identity $Using:M.NodeName -ErrorAction Stop
+                                    Get-ADComputer -Identity $Using:M -ErrorAction Stop
                                     Return $True
                                     }
                                 catch {
@@ -149,11 +150,11 @@ param (
                                     }
                             }
                 SetScript = {
-                                New-ADComputer -Name $Using:M.NodeName -path $Using:M.ServersOU
+                                New-ADComputer -Name $Using:M -path $Using:Node.ServersOU
                             }
                 GetScript = {
                                 try {
-                                    return (Get-ADComputer -Identity $Using:M.NodeName -ErrorAction Stop)
+                                    return (Get-ADComputer -Identity $Using:M -ErrorAction Stop)
                                     }
                                 catch {
                                     return @{Result = $null}
@@ -169,7 +170,7 @@ param (
             GroupName = 'Web Servers'
             GroupScope = 'Global'
             DependsOn = '[xADOrganizationalUnit]GroupsOU'
-            Members = $AllNodes.Where{$_.Role -eq "PullServer"}.sAMAccountName
+            Members = "$PullServer$"
             Credential = $EACredential
             Category = 'Security'
             Path = "OU=Groups,$($Node.DomainDN)"
@@ -574,4 +575,4 @@ param (
 
 }
 
-DC1Config -configurationData $ConfigData -outputpath "C:\DSC\Config" -EACredential (get-credential -username "blah.com\administrator" -Message "EA for ADCS/checking domain presence") -SafeModeAdminPW (get-credential -Username 'Password Only' -Message "Safe Mode Admin PW")
+DC1Config -configurationData $ConfigData -outputpath "C:\DSC\Config" -EACredential (get-credential -username "blah.com\administrator" -Message "EA for ADCS/checking domain presence") -SafeModeAdminPW (get-credential -Username 'Password Only' -Message "Safe Mode Admin PW") -pullserver Pull
