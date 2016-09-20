@@ -5,6 +5,8 @@
                     Domain = "blah.com"
                     DomainDN = "dc=blah,dc=com"
                     ServersOU = 'OU=Servers,dc=blah,dc=com'
+                    GroupsOU = 'OU=Groups,dc=blah,dc=com'
+                    PSDSCAllowDomainUser = $True
                 },
                 @{
                     NodeName = "Pull"
@@ -17,6 +19,8 @@
                     PullserverModulePath = "$env:PROGRAMFILES\WindowsPowerShell\DscService\Modules" 
                     PullServerConfigurationPath = "$env:PROGRAMFILES\WindowsPowerShell\DscService\Configuration" 
                     PullServerThumbPrint = Invoke-Command -ComputerName pull {Get-ChildItem Cert:\LocalMachine\My | Where-Object {($_.EnhancedKeyUsageList -like "Server Authentication*") -and ($_.Issuer -like "CN=blahblahblah root*")}} | Select-Object -expandproperty Thumbprint
+                    Thumbprint = Invoke-Command -ComputerName pull {Get-ChildItem Cert:\LocalMachine\My -DocumentEncryptionCert | Select-Object -expandproperty Thumbprint}
+                    CertificateFile = "C:\DSC\Certs\Pull.cer"
                 }
                 
             )
@@ -24,10 +28,16 @@
 
 Configuration PullConfig {
 
+param (
+    [parameter(Mandatory=$True)]
+    [pscredential]$Credential
+    )
+
     import-DSCresource -ModuleName PSDesiredStateConfiguration,CompositeBase,
         @{ModuleName="xNetworking";ModuleVersion="2.9.0.0"},
         @{ModuleName="xPSDesiredStateConfiguration";ModuleVersion="3.12.0.0"},
-        @{ModuleName="xWebAdministration";ModuleVersion="1.12.0.0"}
+        @{ModuleName="xWebAdministration";ModuleVersion="1.12.0.0"},
+        @{ModuleName="xActiveDirectory";ModuleVersion="2.11.0.0"}
 
     
     node $AllNodes.NodeName {
@@ -37,7 +47,43 @@ Configuration PullConfig {
     }
    
     node $AllNodes.where{$_.Role -eq "PullServer"}.NodeName {  
-
+    
+        WindowsFeature RSATADPowershell
+        {
+            Name = 'RSAT-AD-Powershell'
+            Ensure = 'Present'
+        }
+        
+        xWaitForADDomain WaitForDomain
+        {
+            DomainName = $Node.Domain
+            RetryIntervalSec = 10
+            RetryCount = 10
+        }
+        
+        xADUser WebServerOperator
+        {
+            DomainName = $Node.domain
+            DependsOn = '[xWaitForADDomain]WaitForDomain'
+            UserName = 'WebSvrOperator'
+            Ensure = 'Present'
+            GivenName = "Web"
+            Surname = "Server Operator"
+            DomainAdministratorCredential = $credential
+        }
+       
+        xADGroup WebServerOperatorsGroup
+        {
+            GroupName = 'Web Server Operators'
+            Ensure = 'Present'
+            Credential = $Credential
+            GroupScope = 'Global'
+            Category = 'Security'
+            DependsOn = '[xADUser]WebServerOperator'
+            Path = $Node.GroupsOU
+            Members = 'WebSvrOperator'
+        }
+  
         xDNSServerAddress SetDNSServer
         {
             Address = $Node.DNSServerIP
@@ -135,4 +181,4 @@ Configuration PullConfig {
 
 }
 
-PullConfig -configurationData $ConfigData -outputpath "C:\DSC\Config"
+PullConfig -configurationData $ConfigData -outputpath "C:\DSC\Config" -credential (Get-Credential -UserName "BLAH\Administrator" -message "Credential for adding users to AD")
