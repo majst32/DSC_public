@@ -163,7 +163,7 @@ param (
                 }
             }
 
-#Add Web Servers group - add pull server as member later
+#Add Web Servers group
 
          xADGroup WebServerGroup
         {
@@ -334,7 +334,10 @@ param (
             DependsOn = '[WindowsFeature]ADCS','[xADDomain]FirstDC'    
         }
 
-#region Template setup
+#end region ADCS
+
+
+#region Create and publish templates
 
 #Note:  The Test section is pure laziness.  Future enhancement:  test for more than just existence.
         script CreateWebServer2Template
@@ -468,98 +471,102 @@ param (
                         }
          } 
                                                    
-    #end region - Template Setup
-#end region - ADCS
+#end region - Create and publish templates
 
-#region WebServer Cert setup
+#region template permissions
 
-#would like to collapse next two into one resource with a foreach loop on the GUIDs, but can't get it working.
+#region WebServer Cert permissions - set enroll and autoenroll
 
-        script SetWebServerTemplateAutoenroll
-        {
-            DependsOn = '[Script]CreateWebServer2Template'
-            Credential = $EACredential
-            TestScript = {
-                Import-Module activedirectory
-                $WebServerCertACL = (get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
-                if ($WebServerCertACL -eq $Null) {
-                    write-verbose "Web Servers Group does not have permissions on Web Server template"
-                    Return $False
-                    }
-                elseif (($WebServerCertACL.ActiveDirectoryRights -like "*ExtendedRight*") -and ($WebServerCertACL.ObjectType -notcontains "a05b8cc2-17bc-4802-a710-e7c15ab866a2")) {
-                    write-verbose "Web Servers group has permission, but not the correct permission."
-                    Return $False
-                    }
-                else {
-                    write-verbose "ACL on Web Server Template is set correctly for this GUID for Web Servers Group"
-                    Return $True
-                    }
-                }
-             SetScript = {
-                Import-Module activedirectory
-                $WebServersGroup = get-adgroup -Identity "Web Servers" | Select-Object SID
-                $EnrollGUID = [GUID]::Parse("a05b8cc2-17bc-4802-a710-e7c15ab866a2")
-                $ACL = get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com"
-                $ACL.AddAccessRule((New-Object System.DirectoryServices.ExtendedRightAccessRule $WebServersGroup.SID,'Allow',$EnrollGUID,'None'))
-                #$ACL.AddAccessRule((New-Object System.DirectoryServices.ActiveDirectoryAccessRule $WebServersGroup.SID,'ReadProperty','Allow'))
-                #$ACL.AddAccessRule((New-Object System.DirectoryServices.ActiveDirectoryAccessRule $WebServersGroup.SID,'GenericExecute','Allow'))
-                set-ACL "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" -AclObject $ACL
-                write-verbose "AutoEnroll permissions set for Web Servers Group"
-                }
-             GetScript = {
-                Import-Module activedirectory
-                $WebServerCertACL = (get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
-                if ($WebServerCertACL -ne $Null) {
-                    return @{Result=$WebServerCertACL}
-                    }
-                else {
-                    Return @{}
-                    }
-                }
-         }
-            
-    script SetWebServerTemplateEnroll
-        {
-            DependsOn = '[Script]CreateWebServer2Template'
-            Credential = $EACredential
-            TestScript = {
-                Import-Module activedirectory
-                $WebServerCertACL = (get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
-                if ($WebServerCertACL -eq $Null) {
-                    write-verbose "Web Servers Group does not have permissions on Web Server template"
-                    Return $False
-                    }
-                elseif (($WebServerCertACL.ActiveDirectoryRights -like "*ExtendedRight*") -and ($WebServerCertACL.ObjectType -notcontains "0e10c968-78fb-11d2-90d4-00c04f79dc55")) {
-                    write-verbose "Web Servers group has permission, but not the correct permission."
-                    Return $False
-                    }
-                else {
-                    write-verbose "ACL on Web Server Template is set correctly for this GUID for Web Servers Group"
-                    Return $True
-                    }
-                }
-             SetScript = {
-                Import-Module activedirectory
-                $WebServersGroup = get-adgroup -Identity "Web Servers" | Select-Object SID
-                $EnrollGUID = [GUID]::Parse("0e10c968-78fb-11d2-90d4-00c04f79dc55")
-                $ACL = get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com"
-                $ACL.AddAccessRule((New-Object System.DirectoryServices.ExtendedRightAccessRule $WebServersGroup.SID,'Allow',$EnrollGUID,'None'))
-                #$ACL.AddAccessRule((New-Object System.DirectoryServices.ActiveDirectoryAccessRule $WebServersGroup.SID,'ReadProperty','Allow'))
-                #$ACL.AddAccessRule((New-Object System.DirectoryServices.ActiveDirectoryAccessRule $WebServersGroup.SID,'GenericExecute','Allow'))
-                set-ACL "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" -AclObject $ACL
-                write-verbose "Enroll permissions set for Web Servers Group"
-                }
-             GetScript = {
-                Import-Module activedirectory
-                $WebServerCertACL = (get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
-                if ($WebServerCertACL -ne $Null) {
-                    return @{Result=$WebServerCertACL}
-                    }
-                else {
-                    Return @{}
-                    }
-                }
-         }
+        [string[]]$Perms = "0e10c968-78fb-11d2-90d4-00c04f79dc55","a05b8cc2-17bc-4802-a710-e7c15ab866a2"
+
+        foreach ($P in $Perms) {
+
+                script "Perms_WebCert_$($P)"
+                {
+                    DependsOn = '[Script]CreateWebServer2Template'
+                    Credential = $EACredential
+                    TestScript = {
+                        Import-Module activedirectory
+                        $WebServerCertACL = (get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
+                        if ($WebServerCertACL -eq $Null) {
+                            write-verbose "Web Servers Group does not have permissions on Web Server template"
+                            Return $False
+                            }
+                        elseif (($WebServerCertACL.ActiveDirectoryRights -like "*ExtendedRight*") -and ($WebServerCertACL.ObjectType -notcontains $Using:P)) {
+                            write-verbose "Web Servers group has permission, but not the correct permission."
+                            Return $False
+                            }
+                        else {
+                            write-verbose "ACL on Web Server Template is set correctly for this GUID for Web Servers Group"
+                            Return $True
+                            }
+                        }
+                     SetScript = {
+                        Import-Module activedirectory
+                        $WebServersGroup = get-adgroup -Identity "Web Servers" | Select-Object SID
+                        $EnrollGUID = [GUID]::Parse($Using:P)
+                        $ACL = get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com"
+                        $ACL.AddAccessRule((New-Object System.DirectoryServices.ExtendedRightAccessRule $WebServersGroup.SID,'Allow',$EnrollGUID,'None'))
+                        #$ACL.AddAccessRule((New-Object System.DirectoryServices.ActiveDirectoryAccessRule $WebServersGroup.SID,'ReadProperty','Allow'))
+                        #$ACL.AddAccessRule((New-Object System.DirectoryServices.ActiveDirectoryAccessRule $WebServersGroup.SID,'GenericExecute','Allow'))
+                        set-ACL "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" -AclObject $ACL
+                        write-verbose "Permissions set for Web Servers Group"
+                        }
+                     GetScript = {
+                        Import-Module activedirectory
+                        $WebServerCertACL = (get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
+                        if ($WebServerCertACL -ne $Null) {
+                            return $WebServerCertACL
+                            }
+                        else {
+                            Return @{}
+                            }
+                        }
+                 }
+                 
+                script "Perms_DSCCert_$($P)"
+                {
+                    DependsOn = '[Script]CreateWebServer2Template'
+                    Credential = $EACredential
+                    TestScript = {
+                        Import-Module activedirectory
+                        $DSCCertACL = (get-acl "AD:CN=DSCTemplate,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Domain Computers*"}
+                        if ($DSCCertACL -eq $Null) {
+                            write-verbose "Domain Computers does not have permissions on DSC template"
+                            Return $False
+                            }
+                        elseif (($DSCCertACL.ActiveDirectoryRights -like "*ExtendedRight*") -and ($DSCCertACL.ObjectType -notcontains $Using:P)) {
+                            write-verbose "Domain Computers group has permission, but not the correct permission."
+                            Return $False
+                            }
+                        else {
+                            write-verbose "ACL on DSC Template is set correctly for this GUID for Domain Computers"
+                            Return $True
+                            }
+                        }
+                     SetScript = {
+                        Import-Module activedirectory
+                        $DomainComputersGroup = get-adgroup -Identity "Domain Computers" | Select-Object SID
+                        $EnrollGUID = [GUID]::Parse($Using:P)
+                        $ACL = get-acl "AD:CN=DSCTemplate,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com"
+                        $ACL.AddAccessRule((New-Object System.DirectoryServices.ExtendedRightAccessRule $DomainComputersGroup.SID,'Allow',$EnrollGUID,'None'))
+                        #$ACL.AddAccessRule((New-Object System.DirectoryServices.ActiveDirectoryAccessRule $WebServersGroup.SID,'ReadProperty','Allow'))
+                        #$ACL.AddAccessRule((New-Object System.DirectoryServices.ActiveDirectoryAccessRule $WebServersGroup.SID,'GenericExecute','Allow'))
+                        set-ACL "AD:CN=DSCTemplate,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com" -AclObject $ACL
+                        write-verbose "Permissions set for Domain Computers"
+                        }
+                     GetScript = {
+                        Import-Module activedirectory
+                        $DSCCertACL = (get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Domain Computers"}
+                        if ($DSCCertACL -ne $Null) {
+                            return $DSCCertACL
+                            }
+                        else {
+                            Return @{}
+                            }
+                        }
+                 }
+        }   
 
 #End Region WebServer Cert setup
 
