@@ -154,7 +154,7 @@ param (
                             }
                 GetScript = {
                                 try {
-                                    return (Get-ADComputer -Identity $Using:M -ErrorAction Stop)
+                                    return @{Result=(Get-ADComputer -Identity $Using:M -ErrorAction Stop)}
                                     }
                                 catch {
                                     return @{Result = $null}

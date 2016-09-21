@@ -1,4 +1,6 @@
-﻿Set-DscLocalConfigurationManager -ComputerName Pull -Path "C:\DSC\LCM" -Verbose -Force
+﻿.\LCM_Push.ps1
+
+Set-DscLocalConfigurationManager -ComputerName Pull -Path "C:\DSC\LCM" -Verbose -Force
 
 invoke-command -ComputerName Pull {Get-ChildItem -path "Cert:\LocalMachine\My" -documentEncryptionCert | export-certificate -filepath "C:\Program Files\WindowsPowershell\Pull.cer"}
 copy-item "\\pull\C$\Program Files\WindowsPowershell\pull.cer" -Destination "C:\DSC\Certs" -Force
