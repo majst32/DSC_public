@@ -278,8 +278,8 @@ param (
                             Set-GPRegistryValue -Name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\SystemCertificates\Root\ProtectedRoots" -ValueName "PeerUsages" -value "1.3.6.1.5.5.7.3.2", "1.3.6.1.5.5.7.3.4", "1.3.6.1.4.1.311.10.3.4" -Type String
                         }
             GetScript = {
-                            $RegVal3 = (Get-GPRegistryValue -Name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\SystemCertificates\Root\ProtectedRoots" -ValueName "PeerUsages")
-                            return @{Result = $RegVal3}
+                            $RegVal4 = (Get-GPRegistryValue -Name "PKI AutoEnroll" -Key "HKLM\SOFTWARE\Policies\Microsoft\SystemCertificates\Root\ProtectedRoots" -ValueName "PeerUsages")
+                            return @{Result = $RegVal4}
                         }
             DependsOn = '[Script]setAEGPRegSetting3'
         }
@@ -516,7 +516,7 @@ param (
                         Import-Module activedirectory
                         $WebServerCertACL = (get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Web Servers"}
                         if ($WebServerCertACL -ne $Null) {
-                            return $WebServerCertACL
+                            return @{Result=$WebServerCertACL}
                             }
                         else {
                             Return @{}
@@ -559,14 +559,15 @@ param (
                         Import-Module activedirectory
                         $DSCCertACL = (get-acl "AD:CN=WebServer2,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=blah,DC=com").Access | Where-Object {$_.IdentityReference -like "*Domain Computers"}
                         if ($DSCCertACL -ne $Null) {
-                            return $DSCCertACL
+                            return @{Result=$DSCCertACL}
                             }
                         else {
                             Return @{}
                             }
                         }
                  }
-        }   
+      }   
+
 
 #End Region WebServer Cert setup
 

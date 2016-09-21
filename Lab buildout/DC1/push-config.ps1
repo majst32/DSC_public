@@ -2,6 +2,8 @@
 
 Set-DscLocalConfigurationManager -ComputerName DC1 -Path "C:\DSC\LCM" -Verbose -Force
 
+.\DC1Config.ps1
+
 copy-item "C:\Program Files\WindowsPowerShell\Modules\xActiveDirectory" -Destination "\\dc1\C$\Program Files\WindowsPowershell\Modules\xActiveDirectory" -Recurse -Force
 copy-item "C:\Program Files\WindowsPowershell\Modules\xADCSDeployment" -Destination "\\dc1\C$\Program Files\WindowsPowershell\Modules" -Recurse -force
 copy-item "C:\Program Files\WindowsPowershell\Modules\xNetworking" -Destination "\\dc1\C$\Program Files\WindowsPowershell\Modules" -Recurse -Force
