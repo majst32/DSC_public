@@ -38,7 +38,7 @@ param (
     import-DSCresource -ModuleName PSDesiredStateConfiguration,CompositeBase,
         @{ModuleName="xActiveDirectory";ModuleVersion="2.11.0.0"},
         @{ModuleName="xNetworking";ModuleVersion="2.9.0.0"},
-        @{ModuleName="XADCSDeployment";ModuleVersion="1.0.0.1"},
+        @{ModuleName="XADCSDeployment";ModuleVersion="1.0.0.0"},
         @{ModuleName="xDHCPServer";ModuleVersion="1.4.0.0"}
     
     node $AllNodes.NodeName {
