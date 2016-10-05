@@ -35,7 +35,7 @@ param (
     [string[]] $pullserver
     )
 
-    import-DSCresource -ModuleName PSDesiredStateConfiguration,CompositeBase,
+    import-DSCresource -ModuleName PSDesiredStateConfiguration,CompositeBase,Composite2012,
         @{ModuleName="xActiveDirectory";ModuleVersion="2.11.0.0"},
         @{ModuleName="xNetworking";ModuleVersion="2.9.0.0"},
         @{ModuleName="XADCSDeployment";ModuleVersion="1.0.0.0"},
@@ -44,6 +44,8 @@ param (
     node $AllNodes.NodeName {
     
     BaseConfig Base {}
+
+    ServerCore SC {}
 
     }
    
