@@ -68,13 +68,5 @@
                             return @{Result = $Result}
                         }
         }
-
-        WindowsFeature ServerCore
-        {
-            Ensure = "Absent"
-            Name = "User-Interfaces-Infra"
-            IncludeAllSubFeature = $false
-            DependsOn = '[xFirewall]vmpingFWRule','[xFirewall]SMB','[xFirewall]RemoteEvtLogFWRule1','[xFirewall]RemoteEvtLogFWRule2','[xFirewall]RemoteEvtLogFWRule3','[Script]DSCAnalyticLog'
-        } 
                                                               
     }
